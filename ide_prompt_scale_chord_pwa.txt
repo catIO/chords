@@ -1,0 +1,91 @@
+Build a production-ready offline-first PWA called “Scale Chord Practice” using React, TypeScript, and Vite.
+
+Use `src/data/royal_conservatory_pwa_chords.json` as the only curriculum source. Do not hard-code grades, scales, chords, or progressions in components.
+
+PRODUCT GOAL
+The app helps a classical guitarist practice the chords and chord sequences attached to Royal Conservatory scale exercises. A user selects a grade, then receives random chord prompts drawn only from the scales assigned to that grade.
+
+CORE MODES
+1. Random Chord
+- Select a grade.
+- Randomly choose one scale in that grade and one chord event from its sequence.
+- Show the parent scale, Roman numeral, and optionally hide the chord symbol until Reveal.
+- Render the chord tones on a treble staff.
+- Add Previous, Next, Repeat, and Shuffle.
+
+2. Random Sequence
+- Randomly choose one complete scale cadence or progression from the selected grade.
+- Render every chord in order on a staff and as chord labels.
+- Highlight the current event.
+- Step forward and backward.
+- Add autoplay and adjustable tempo.
+- Respect durationBeats and beatUnit.
+
+3. Grade Review
+- List every scale in the selected grade.
+- Expand a scale to see and play its complete chord sequence.
+- Filter by major, harmonic minor, and melodic minor.
+
+DATA
+Create strict TypeScript types for Curriculum, ScaleExercise, and ChordEvent.
+Validate the imported JSON with Zod at startup and show a useful error screen if validation fails.
+
+MUSIC RENDERING
+Use VexFlow.
+Convert notes such as C, F#, Bb, and G# into VexFlow keys.
+Render each event as a simultaneous chord.
+Allocate octaves automatically:
+- bass or root around octave 3
+- upper chord tones around octaves 4 to 5
+- raise duplicated tones when needed to avoid collisions
+The JSON is authoritative for spelling, chord identity, order, and duration.
+
+AUDIO
+Use Tone.js or Web Audio.
+Use the same octave-allocation utility for notation and playback.
+Include play chord, play sequence, stop, tempo, and optional metronome.
+
+PRACTICE LOGIC
+- Do not repeat the same prompt twice in a row when alternatives exist.
+- Use a shuffle bag so every eligible prompt appears before recycling.
+- Save grade, mode, theme, tempo, and history in localStorage.
+- Track attempts, reveals, Again, Hard, Good, and last practiced date.
+- Weight future selection toward Again and Hard without eliminating variety.
+
+UI
+- Mobile-first and portrait friendly.
+- Large notation and chord display.
+- Dark and light themes.
+- Keyboard shortcuts:
+  Space = reveal or play
+  Left/Right = previous/next
+  1 = Again
+  2 = Hard
+  3 = Good
+- Accessible labels, focus states, and contrast.
+- Avoid decorative clutter.
+
+PWA
+- Installable manifest.
+- Service worker and offline caching.
+- Cache the app shell and curriculum JSON.
+- Notify the user when an update is ready.
+- Include icons and theme colors.
+- Pass Lighthouse PWA checks.
+
+PROJECT STRUCTURE
+- src/components
+- src/features/practice
+- src/features/review
+- src/music
+- src/data
+- src/types
+- src/storage
+- src/hooks
+
+TESTS
+Use Vitest and React Testing Library.
+Test JSON validation, grade filtering, shuffle-bag behavior, immediate-repeat prevention, sequence ordering, note parsing, octave allocation, and localStorage persistence.
+
+DELIVERABLE
+Create the full working app, not a mockup. Include a README and npm scripts for dev, test, build, and preview. Copy the provided JSON into `src/data/royal_conservatory_pwa_chords.json` and build all curriculum behavior from it.
