@@ -12,6 +12,7 @@ export interface ParsedNote {
     letter: string
     accidental: string
     semitone: number
+    specifiedOctave?: number
 }
 
 export interface VoicedNote extends ParsedNote {
@@ -21,12 +22,12 @@ export interface VoicedNote extends ParsedNote {
 }
 
 export function parsePitchSpelling(note: string): ParsedNote {
-    const match = /^([A-G])(#{1,2}|b{1,2})?$/.exec(note)
+    const match = /^([A-G])(#{1,2}|b{1,2})?(\d)?$/.exec(note)
     if (!match) {
         throw new Error(`Invalid pitch spelling: ${note}`)
     }
 
-    const [, letter, accidentalRaw = ''] = match
+    const [, letter, accidentalRaw = '', octaveStr] = match
     let accidentalShift = 0
     for (const char of accidentalRaw) {
         accidentalShift += char === '#' ? 1 : -1
@@ -36,6 +37,7 @@ export function parsePitchSpelling(note: string): ParsedNote {
         letter,
         accidental: accidentalRaw,
         semitone: LETTER_TO_SEMITONE[letter] + accidentalShift,
+        specifiedOctave: octaveStr ? Number(octaveStr) : undefined,
     }
 }
 
@@ -48,23 +50,30 @@ export function midiToFrequency(midi: number): number {
 }
 
 export function allocateChordVoicing(notes: string[]): VoicedNote[] {
-    // Standard guitar chord notation doubles the root at the octave for triads:
-    // e.g. [C, E, G] → [C, E, G, C]  (root, 3rd, 5th, root 8va)
     const spellings = notes.length === 3 ? [...notes, notes[0]] : notes
     const parsed = spellings.map(parsePitchSpelling)
-    let previous = Number.NEGATIVE_INFINITY
 
-    // Determine root octave once — non-root notes start at same octave as root
-    // to produce close-position voicings (within ~1 octave spread).
+    // If notes have explicit octaves (e.g. "F#3"), use them directly
+    if (parsed[0].specifiedOctave !== undefined) {
+        return parsed.map((item) => {
+            const octave = item.specifiedOctave!
+            return {
+                ...item,
+                midi: toMidi(item, octave),
+                octave,
+                vexKey: `${item.letter.toLowerCase()}/${octave}`,
+            }
+        })
+    }
+
+    // Fallback: ascending algorithm for notes without octaves
+    let previous = Number.NEGATIVE_INFINITY
     const rootOctave = parsed[0].semitone >= 7 ? 3 : 4
 
     return parsed.map((item) => {
-        // All notes start at the root's octave; the ascending-MIDI loop below
-        // bumps them up only as needed to stay strictly ascending.
         let octave = rootOctave
         let midi = toMidi(item, octave)
 
-        // Push up until strictly above the previous note
         while (midi <= previous) {
             midi += 12
             octave += 1

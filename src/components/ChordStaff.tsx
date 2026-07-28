@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Accidental, Formatter, FretHandFinger, Renderer, Stave, StaveNote, Voice, VoiceMode } from 'vexflow'
+import { Accidental, Formatter, FretHandFinger, Renderer, Stave, StaveNote, Voice, VoiceMode, Stem } from 'vexflow'
 import { Box } from '@mui/material'
 import type { ChordEvent } from '../types/curriculum'
 import { allocateChordVoicing, toVexAccidental, getKeySignatureAccidentals } from '../music/noteUtils'
@@ -37,7 +37,7 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
         const staveWidth = clefWidth + keySigWidth + noteSpace + 40
         const scale = 1.4
         const canvasWidth = Math.ceil(staveWidth * scale) + 16
-        const canvasHeight = 180
+        const canvasHeight = 240
 
         const renderer = new Renderer(host, Renderer.Backends.SVG)
         renderer.resize(canvasWidth, canvasHeight)
@@ -63,60 +63,105 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
             .map((event) => event.durationBeats * (4 / event.beatUnit))
             .reduce((sum, beats) => sum + beats, 0)
 
-        // SOFT mode: don't error on partial bars (e.g. a 2-beat chord in 4/4)
-        const voice = new Voice({
+        const voiceParams = {
             numBeats: Math.max(1, Math.ceil(totalQuarterBeats)),
             beatValue: 4,
-        }).setMode(VoiceMode.SOFT)
+        }
 
-        const notes = events.map((event, eventIndex) => {
+        // Build two voices: bass (stem down) and treble (stem up)
+        const bassVoice = new Voice(voiceParams).setMode(VoiceMode.SOFT)
+        const trebleVoice = new Voice(voiceParams).setMode(VoiceMode.SOFT)
+
+        events.forEach((event) => {
             const voiced = allocateChordVoicing(event.notes)
-            const note = new StaveNote({
-                clef: 'treble',
-                keys: voiced.map((entry) => entry.vexKey),
-                duration: toVexDuration(event),
-            })
+            const duration = toVexDuration(event)
+            const fingerArr = event.fingerings ?? []
 
-            voiced.forEach((entry, keyIndex) => {
-                const acc = toVexAccidental(entry.accidental)
-                if (acc) {
-                    // Only add explicit accidental if it's NOT already in the key signature
-                    const keySigAcc = keySigAccidentals.get(entry.letter)
-                    if (acc !== keySigAcc) {
-                        note.addModifier(new Accidental(acc), keyIndex)
+            if (voiced.length >= 3) {
+                // Split: bass note (stem down), upper notes (stem up)
+                const bassVoiced = [voiced[0]]
+                const trebleVoiced = voiced.slice(1)
+
+                // Bass note
+                const bassNote = new StaveNote({
+                    clef: 'treble',
+                    keys: bassVoiced.map((e) => e.vexKey),
+                    duration,
+                    stemDirection: Stem.DOWN,
+                })
+                bassVoiced.forEach((entry, ki) => {
+                    const acc = toVexAccidental(entry.accidental)
+                    if (acc) {
+                        const keySigAcc = keySigAccidentals.get(entry.letter)
+                        if (acc !== keySigAcc) bassNote.addModifier(new Accidental(acc), ki)
                     }
+                })
+                if (fingerArr[0]) {
+                    const finger = new FretHandFinger(fingerArr[0])
+                    finger.setPosition(1)
+                    finger.setXShift(-10)
+                    bassNote.addModifier(finger, 0)
                 }
-            })
 
-            // Add fingering annotations if provided
-            if (event.fingerings) {
-                // Fingerings correspond to the original notes; for triads we doubled the
-                // root so the array has 3 entries but voiced has 4. Map accordingly.
-                const fingerArr = event.fingerings
-                voiced.forEach((_, keyIndex) => {
-                    const fingerIndex = keyIndex < fingerArr.length ? keyIndex : undefined
-                    if (fingerIndex !== undefined && fingerArr[fingerIndex] !== undefined) {
-                        const finger = new FretHandFinger(fingerArr[fingerIndex])
-                        finger.setPosition(1) // LEFT of notehead
-                        finger.setXShift(-12)
-                        note.addModifier(finger, keyIndex)
+                // Treble notes
+                const trebleNote = new StaveNote({
+                    clef: 'treble',
+                    keys: trebleVoiced.map((e) => e.vexKey),
+                    duration,
+                    stemDirection: Stem.UP,
+                })
+                trebleVoiced.forEach((entry, ki) => {
+                    const acc = toVexAccidental(entry.accidental)
+                    if (acc) {
+                        const keySigAcc = keySigAccidentals.get(entry.letter)
+                        if (acc !== keySigAcc) trebleNote.addModifier(new Accidental(acc), ki)
+                    }
+                    // Fingering: offset by 1 since index 0 went to bass
+                    const fi = ki + 1
+                    if (fi < fingerArr.length && fingerArr[fi]) {
+                        const finger = new FretHandFinger(fingerArr[fi])
+                        finger.setPosition(1)
+                        finger.setXShift(-10)
+                        trebleNote.addModifier(finger, ki)
                     }
                 })
-            }
 
-            if (eventIndex === currentIndex) {
-                note.setStyle({
-                    fillStyle: '#5f3b20',
-                    strokeStyle: '#5f3b20',
+                bassVoice.addTickables([bassNote])
+                trebleVoice.addTickables([trebleNote])
+            } else {
+                // 2 or fewer notes: single voice, stem up
+                const note = new StaveNote({
+                    clef: 'treble',
+                    keys: voiced.map((e) => e.vexKey),
+                    duration,
+                    stemDirection: Stem.UP,
                 })
+                voiced.forEach((entry, ki) => {
+                    const acc = toVexAccidental(entry.accidental)
+                    if (acc) {
+                        const keySigAcc = keySigAccidentals.get(entry.letter)
+                        if (acc !== keySigAcc) note.addModifier(new Accidental(acc), ki)
+                    }
+                    if (ki < fingerArr.length && fingerArr[ki]) {
+                        const finger = new FretHandFinger(fingerArr[ki])
+                        finger.setPosition(1)
+                        finger.setXShift(-10)
+                        note.addModifier(finger, ki)
+                    }
+                })
+                bassVoice.addTickables([note])
+                // Add ghost note to treble voice to keep alignment
+                trebleVoice.addTickables([new StaveNote({
+                    clef: 'treble',
+                    keys: ['b/4'],
+                    duration: duration + 'r',  // rest
+                })])
             }
-
-            return note
         })
 
-        voice.addTickables(notes)
-        new Formatter().joinVoices([voice]).format([voice], Math.max(60, noteSpace))
-        voice.draw(ctx, stave)
+        new Formatter().joinVoices([bassVoice, trebleVoice]).format([bassVoice, trebleVoice], Math.max(60, noteSpace))
+        bassVoice.draw(ctx, stave)
+        trebleVoice.draw(ctx, stave)
 
     }, [events, currentIndex, keySignature])
 

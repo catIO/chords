@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const NOTE_PATTERN = /^[A-G](?:#{1,2}|b{1,2})?$/
+export const NOTE_PATTERN = /^[A-G](?:#{1,2}|b{1,2})?\d?$/
 
 export const chordEventSchema = z.object({
     id: z.string().min(1),

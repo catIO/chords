@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
     Accordion,
     AccordionDetails,
@@ -20,6 +21,28 @@ interface GradeReviewPanelProps {
 }
 
 export function GradeReviewPanel({ scales, expandedScaleId, onExpandChange }: GradeReviewPanelProps) {
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+            if (scales.length === 0) return
+
+            const currentIdx = expandedScaleId
+                ? scales.findIndex((s) => s.id === expandedScaleId)
+                : -1
+
+            let nextIdx: number
+            if (e.key === 'ArrowRight') {
+                nextIdx = currentIdx < scales.length - 1 ? currentIdx + 1 : 0
+            } else {
+                nextIdx = currentIdx > 0 ? currentIdx - 1 : scales.length - 1
+            }
+
+            onExpandChange(scales[nextIdx].id)
+        }
+
+        window.addEventListener('keydown', handleKey)
+        return () => window.removeEventListener('keydown', handleKey)
+    }, [scales, expandedScaleId, onExpandChange])
     if (scales.length === 0) {
         return (
             <Card>
