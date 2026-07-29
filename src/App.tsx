@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import MusicNoteRoundedIcon from '@mui/icons-material/MusicNoteRounded'
 import { ThemeProvider } from '@mui/material/styles'
 import { curriculum, curriculumError, gradeDisplayName, gradeOptions } from './data/curriculum'
 import { ValidationErrorScreen } from './components/ValidationErrorScreen'
@@ -82,15 +83,17 @@ function PracticeApp() {
         sx={{
           minHeight: '100vh',
           pb: 6,
+          bgcolor: paletteMode === 'light' ? '#f5ede3' : '#111318',
           background:
             paletteMode === 'light'
-              ? 'radial-gradient(circle at 18% 0%, rgba(175,120,64,0.16), transparent 48%), radial-gradient(circle at 90% 12%, rgba(118,72,35,0.14), transparent 36%), #fff3e2'
-              : 'radial-gradient(circle at 15% 0%, rgba(71,96,134,0.3), transparent 50%), radial-gradient(circle at 90% 12%, rgba(128,88,52,0.2), transparent 38%), #0f141d',
+              ? 'radial-gradient(circle at 18% 0%, rgba(175,120,64,0.1), transparent 48%), radial-gradient(circle at 90% 12%, rgba(118,72,35,0.08), transparent 36%), #f5ede3'
+              : '#111318',
         }}
       >
-        <AppBar position="sticky" color="transparent" elevation={0}>
-          <Toolbar sx={{ backdropFilter: 'blur(8px)' }}>
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+        <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: paletteMode === 'light' ? 'rgba(175,120,64,0.15)' : 'rgba(255,255,255,0.06)', color: 'text.primary' }}>
+          <Toolbar sx={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+            <MusicNoteRoundedIcon sx={{ mr: 1, opacity: 0.7, fontSize: 22 }} />
+            <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
               Scale Chord Practice
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
@@ -129,7 +132,7 @@ function PracticeApp() {
         </AppBar>
 
         <Container maxWidth="md" sx={{ mt: 2 }}>
-          <Paper sx={{ p: { xs: 2, sm: 3 } }} elevation={4}>
+          <Paper sx={{ p: { xs: 2, sm: 3 }, transition: 'box-shadow 0.3s ease' }} elevation={4}>
             <Stack spacing={2.5}>
               <FormControl fullWidth>
                 <InputLabel id="grade-label">Level</InputLabel>

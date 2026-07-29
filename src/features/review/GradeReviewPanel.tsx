@@ -68,8 +68,8 @@ export function GradeReviewPanel({ scales, expandedScaleId, onExpandChange }: Gr
                             useFlexGap
                             sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                         >
-                            <Typography variant="h6">{scale.scaleName}</Typography>
-                            <Chip label={scale.mode} size="small" />
+                            <Typography variant="h6" sx={{ fontSize: { xs: '1.05rem', sm: '1.15rem' } }}>{scale.scaleName}</Typography>
+                            <Chip label={scale.mode} size="small" color="secondary" variant="outlined" />
                             {scale.minorForm ? <Chip label={scale.minorForm} size="small" variant="outlined" /> : null}
                         </Stack>
                     </AccordionSummary>
@@ -87,7 +87,14 @@ export function GradeReviewPanel({ scales, expandedScaleId, onExpandChange }: Gr
                                     <Chip
                                         key={event.id}
                                         label={`${event.romanNumeral} ${event.symbol}`}
-                                        sx={scale.sequence.length <= 2 ? { flex: 1 } : undefined}
+                                        color="primary"
+                                        variant="filled"
+                                        sx={{
+                                            fontWeight: 700,
+                                            fontSize: '0.95rem',
+                                            py: 0.25,
+                                            ...(scale.sequence.length <= 2 ? { flex: 1 } : {}),
+                                        }}
                                     />
                                 ))}
                             </Stack>
