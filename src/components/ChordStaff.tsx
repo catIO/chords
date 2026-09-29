@@ -58,6 +58,12 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
 
         // Build set of accidentals implied by the key signature so we skip them on notes
         const keySigAccidentals = keySignature ? getKeySignatureAccidentals(keySignature) : new Map<string, string>()
+        const displayedAccidental = (entry: { letter: string; accidental: string }): string | null => {
+            const keySigAcc = keySigAccidentals.get(entry.letter)
+            const acc = toVexAccidental(entry.accidental)
+            if (acc) return acc === keySigAcc ? null : acc
+            return keySigAcc ? 'n' : null
+        }
 
         const totalQuarterBeats = events
             .map((event) => event.durationBeats * (4 / event.beatUnit))
@@ -90,11 +96,8 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
                     stemDirection: Stem.DOWN,
                 })
                 bassVoiced.forEach((entry, ki) => {
-                    const acc = toVexAccidental(entry.accidental)
-                    if (acc) {
-                        const keySigAcc = keySigAccidentals.get(entry.letter)
-                        if (acc !== keySigAcc) bassNote.addModifier(new Accidental(acc), ki)
-                    }
+                    const acc = displayedAccidental(entry)
+                    if (acc) bassNote.addModifier(new Accidental(acc), ki)
                 })
                 if (fingerArr[0]) {
                     const finger = new FretHandFinger(fingerArr[0])
@@ -111,11 +114,8 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
                     stemDirection: Stem.UP,
                 })
                 trebleVoiced.forEach((entry, ki) => {
-                    const acc = toVexAccidental(entry.accidental)
-                    if (acc) {
-                        const keySigAcc = keySigAccidentals.get(entry.letter)
-                        if (acc !== keySigAcc) trebleNote.addModifier(new Accidental(acc), ki)
-                    }
+                    const acc = displayedAccidental(entry)
+                    if (acc) trebleNote.addModifier(new Accidental(acc), ki)
                     // Fingering: offset by 1 since index 0 went to bass
                     const fi = ki + 1
                     if (fi < fingerArr.length && fingerArr[fi]) {
@@ -137,11 +137,8 @@ export function ChordStaff({ events, currentIndex = -1, keySignature }: ChordSta
                     stemDirection: Stem.UP,
                 })
                 voiced.forEach((entry, ki) => {
-                    const acc = toVexAccidental(entry.accidental)
-                    if (acc) {
-                        const keySigAcc = keySigAccidentals.get(entry.letter)
-                        if (acc !== keySigAcc) note.addModifier(new Accidental(acc), ki)
-                    }
+                    const acc = displayedAccidental(entry)
+                    if (acc) note.addModifier(new Accidental(acc), ki)
                     if (ki < fingerArr.length && fingerArr[ki]) {
                         const finger = new FretHandFinger(fingerArr[ki])
                         finger.setPosition(1)

@@ -10,17 +10,17 @@ import {
     Typography,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import type { ScaleExercise } from '../../types/curriculum'
 import { ChordStaff } from '../../components/ChordStaff'
 import { toVexKeySignature } from '../../music/noteUtils'
+import type { CadenceScale } from './mergeMinorForms'
 
-interface GradeReviewPanelProps {
-    scales: ScaleExercise[]
+interface CadencePanelProps {
+    scales: CadenceScale[]
     expandedScaleId: string | null
     onExpandChange: (scaleId: string | null) => void
 }
 
-export function GradeReviewPanel({ scales, expandedScaleId, onExpandChange }: GradeReviewPanelProps) {
+export function CadencePanel({ scales, expandedScaleId, onExpandChange }: CadencePanelProps) {
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
@@ -70,7 +70,9 @@ export function GradeReviewPanel({ scales, expandedScaleId, onExpandChange }: Gr
                         >
                             <Typography variant="h6" sx={{ fontSize: { xs: '1.05rem', sm: '1.15rem' } }}>{scale.scaleName}</Typography>
                             <Chip label={scale.mode} size="small" color="secondary" variant="outlined" />
-                            {scale.minorForm ? <Chip label={scale.minorForm} size="small" variant="outlined" /> : null}
+                            {scale.minorForms.length > 0 ? (
+                                <Chip label={scale.minorForms.join(' & ')} size="small" variant="outlined" />
+                            ) : null}
                         </Stack>
                     </AccordionSummary>
                     <AccordionDetails>

@@ -35,6 +35,11 @@ describe('note parsing and voicing', () => {
         expect(midis).toEqual([...midis].sort((a, b) => a - b))
     })
 
+    it('keeps explicit three-note voicings as written', () => {
+        const voiced = allocateChordVoicing(['F4', 'A4', 'C5'])
+        expect(voiced.map((n) => n.letter + n.octave)).toEqual(['F4', 'A4', 'C5'])
+    })
+
     it('allocates ascending octaves without collisions for 4-note input', () => {
         const voiced = allocateChordVoicing(['C', 'E', 'G', 'C'])
         const midiValues = voiced.map((note) => note.midi)

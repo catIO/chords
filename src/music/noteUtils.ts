@@ -50,11 +50,12 @@ export function midiToFrequency(midi: number): number {
 }
 
 export function allocateChordVoicing(notes: string[]): VoicedNote[] {
-    const spellings = notes.length === 3 ? [...notes, notes[0]] : notes
+    const hasOctaves = /\d$/.test(notes[0])
+    const spellings = notes.length === 3 && !hasOctaves ? [...notes, notes[0]] : notes
     const parsed = spellings.map(parsePitchSpelling)
 
     // If notes have explicit octaves (e.g. "F#3"), use them directly
-    if (parsed[0].specifiedOctave !== undefined) {
+    if (hasOctaves) {
         return parsed.map((item) => {
             const octave = item.specifiedOctave!
             return {
@@ -119,8 +120,8 @@ const KEY_SIG_MAP: Record<string, number> = {
 
 // Relative major for minor keys
 const MINOR_TO_MAJOR: Record<string, string> = {
-    A: 'C', E: 'G', B: 'D', 'F#': 'A', 'C#': 'E', 'G#': 'B',
-    D: 'F', G: 'Bb', C: 'Eb', F: 'Ab', Bb: 'Db', Eb: 'Gb',
+    A: 'C', E: 'G', B: 'D', 'F#': 'A', 'C#': 'E', 'G#': 'B', 'D#': 'F#', 'A#': 'C#',
+    D: 'F', G: 'Bb', C: 'Eb', F: 'Ab', Bb: 'Db', Eb: 'Gb', Ab: 'Cb',
 }
 
 /**
