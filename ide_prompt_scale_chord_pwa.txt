@@ -1,4 +1,4 @@
-Build a production-ready offline-first PWA called “Scale Chord Practice” using React, TypeScript, and Vite.
+Build a production-ready offline-first PWA called  "Chord Practice” using React, TypeScript, and Vite.
 
 Use `src/data/royal_conservatory_pwa_chords.json` as the only curriculum source. Do not hard-code grades, scales, chords, or progressions in components.
 

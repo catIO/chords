@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Scale Chord Practice',
-        short_name: 'Scale Chords',
-        description: 'Offline-first Royal Conservatory scale chord practice for classical guitar.',
+        name: 'Chord Practice',
+        short_name: ' Chords',
+        description: 'Offline-first chord practice for classical guitar.',
         theme_color: '#0f172a',
         background_color: '#fff8ef',
         display: 'standalone',

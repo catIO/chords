@@ -20,7 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
-import MusicNoteRoundedIcon from '@mui/icons-material/MusicNoteRounded'
+import { ChordLogoIcon } from './components/ChordLogoIcon'
 import { ThemeProvider } from '@mui/material/styles'
 import { curriculum, curriculumError, gradeDisplayName, gradeOptions } from './data/curriculum'
 import { ValidationErrorScreen } from './components/ValidationErrorScreen'
@@ -94,45 +94,59 @@ function PracticeApp() {
               : '#111318',
         }}
       >
-        <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: paletteMode === 'light' ? 'rgba(175,120,64,0.15)' : 'rgba(255,255,255,0.06)', color: 'text.primary' }}>
-          <Toolbar sx={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-            <MusicNoteRoundedIcon sx={{ mr: 1, opacity: 0.7, fontSize: 22 }} />
-            <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
-              Scale Chord Practice
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <IconButton
-              aria-label="Open settings"
-              onClick={(event) => setSettingsAnchorEl(event.currentTarget)}
-              color="inherit"
-            >
-              <SettingsOutlinedIcon />
-            </IconButton>
-            <Menu
-              anchorEl={settingsAnchorEl}
-              open={Boolean(settingsAnchorEl)}
-              onClose={() => setSettingsAnchorEl(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              <ListSubheader>Settings</ListSubheader>
-              <MenuItem disableRipple disableTouchRipple>
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                  <InputLabel id="theme-label">Theme</InputLabel>
-                  <Select
-                    labelId="theme-label"
-                    value={themeChoice}
-                    label="Theme"
-                    onChange={(evt) => setThemeChoice(evt.target.value as 'light' | 'dark' | 'system')}
-                  >
-                    <MenuItem value="light">Light</MenuItem>
-                    <MenuItem value="dark">Dark</MenuItem>
-                    <MenuItem value="system">System</MenuItem>
-                  </Select>
-                </FormControl>
-              </MenuItem>
-            </Menu>
-          </Toolbar>
+        <AppBar
+          position="sticky"
+          color="transparent"
+          elevation={0}
+          sx={{
+            borderBottom: 1,
+            borderColor: paletteMode === 'light' ? 'rgba(175,120,64,0.15)' : 'rgba(255,255,255,0.06)',
+            color: 'text.primary',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <Container maxWidth="md">
+            <Toolbar disableGutters>
+              <ChordLogoIcon sx={{ mr: 1.25, fontSize: 28 }} />
+              <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
+                Chord Practice
+              </Typography>
+              <Box sx={{ flexGrow: 1 }} />
+              <IconButton
+                aria-label="Open settings"
+                edge="end"
+                onClick={(event) => setSettingsAnchorEl(event.currentTarget)}
+                color="inherit"
+              >
+                <SettingsOutlinedIcon />
+              </IconButton>
+              <Menu
+                anchorEl={settingsAnchorEl}
+                open={Boolean(settingsAnchorEl)}
+                onClose={() => setSettingsAnchorEl(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                <ListSubheader>Settings</ListSubheader>
+                <MenuItem disableRipple disableTouchRipple>
+                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel id="theme-label">Theme</InputLabel>
+                    <Select
+                      labelId="theme-label"
+                      value={themeChoice}
+                      label="Theme"
+                      onChange={(evt) => setThemeChoice(evt.target.value as 'light' | 'dark' | 'system')}
+                    >
+                      <MenuItem value="light">Light</MenuItem>
+                      <MenuItem value="dark">Dark</MenuItem>
+                      <MenuItem value="system">System</MenuItem>
+                    </Select>
+                  </FormControl>
+                </MenuItem>
+              </Menu>
+            </Toolbar>
+          </Container>
         </AppBar>
 
         <Container maxWidth="md" sx={{ mt: 2 }}>

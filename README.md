@@ -1,4 +1,4 @@
-# Scale Chord Practice
+#  Chord Practice
 
 Offline-first progressive web app for classical guitar chord work
 
