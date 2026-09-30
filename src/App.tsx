@@ -195,7 +195,7 @@ function PracticeApp() {
                   />
                 </>
               ) : (
-                <ChordDrillPanel curriculum={appCurriculum} />
+                <ChordDrillPanel curriculum={appCurriculum} grade={grade} onGradeChange={setGrade} />
               )}
             </Stack>
           </Paper>

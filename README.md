@@ -24,12 +24,23 @@ The Random chords mode generates chords from music theory in the keys that appea
 
 - Cadences mode: the RCM cadence for every key in the selected level
 - Filter by major or minor; minor keys whose harmonic and melodic cadences are identical are listed once
-- Random chords mode: weighted random chords in chosen keys and minor forms (natural, harmonic, melodic)
-  - Choose chords (triads; ii7, V7, vii7; V7/V and the Neapolitan sixth) and inversions (root, 1st, 2nd, 3rd)
-  - Each chord shows its name, Roman numeral and notation with fingerings
+- Scale chord practice mode: practice chords across curriculum scales with full sequence and flashcard formats
+  - Multi-level selection: select multiple RCM levels simultaneously, with full visibility of all major and minor scales to customize or toggle individually
+  - Display format:
+    - **Scale sequence (all chords at once)** (default): renders all chords of the active scale side-by-side on the staff with key signature, notes, and fingerings
+    - **Single chord flashcard**: drills individual chords at random
+  - Harmony focus:
+    - **Cadence (tonic–dominant–tonic)** (default): renders classical cadence progression ($I - V - I$ for major keys; $i - V - i$ with raised 7th dominant for minor keys)
+    - **Tonic only**: renders the tonic triad across selected inversions ($Root - 1^{st}\text{ inv} - 2^{nd}\text{ inv}$) on the staff
+    - **All degrees**: renders all 7 diatonic scale degrees across the staff (supporting Natural and Harmonic minor options)
+  - Triad voicing texture:
+    - **3 notes (pure triad)** (default): strictly one note per pitch class ($1 - 3 - 5$), with no doubled root/octave
+    - **4 notes (classical guitar $p-i-m-a$)**: standard 4-string classical guitar texture with doubled root/octave
+  - Active scale navigation: step through scales with Prev/Next buttons, $\leftarrow$ / $\rightarrow$ keys, or by clicking any scale chip
+  - Choose chord types (triads; ii7, V7, vii7; V7/V and Neapolitan sixth) and inversions (root, 1st, 2nd, 3rd)
+  - Clear labels showing chord symbol, Roman numeral, and position
   - "Common in repertoire" weighting favours I, V, V7, IV; "Equal" weights every chord the same
-  - Guitar voicings: the easiest 4-note shape (thumb bass + three adjacent treble strings) in standard tuning
-  - Keyboard: Space, Enter or Right arrow for the next chord
+  - Keyboard: Space, Enter or $\rightarrow$: next chord / scale · $\leftarrow$: previous scale
 - Treble-staff chord rendering via VexFlow (guitar 8vb clef, key signatures, fingerings)
 - Keyboard navigation: Left/Right arrows to step through scales
 - Light/dark/system themes with mobile-first Material UI layout

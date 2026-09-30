@@ -19,3 +19,19 @@ export function curriculumKeys(curriculum: Curriculum): KeyChoice[] {
         order.filter((tonic) => present.has(keyId(tonic, mode))).map((tonic) => ({ id: keyId(tonic, mode), tonic, mode }))
     return [...ordered('major', MAJOR_ORDER), ...ordered('minor', MINOR_ORDER)]
 }
+
+/** Keys used in a specific RC curriculum grade, ordered around the circle of fifths. */
+export function gradeKeys(curriculum: Curriculum, grade: string): KeyChoice[] {
+    return keysForGrades(curriculum, [grade])
+}
+
+/** Keys used across multiple specified RC curriculum grades, ordered around the circle of fifths. */
+export function keysForGrades(curriculum: Curriculum, grades: string[]): KeyChoice[] {
+    const gradeScales = grades.flatMap((g) => curriculum.grades[g] ?? [])
+    const present = new Set(gradeScales.map((s) => keyId(s.tonic, s.mode)))
+    const ordered = (mode: Mode, order: string[]) =>
+        order.filter((tonic) => present.has(keyId(tonic, mode))).map((tonic) => ({ id: keyId(tonic, mode), tonic, mode }))
+    return [...ordered('major', MAJOR_ORDER), ...ordered('minor', MINOR_ORDER)]
+}
+
+

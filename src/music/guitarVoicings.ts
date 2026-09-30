@@ -150,10 +150,72 @@ export function generateVoicing(chord: Chord): GuitarVoicing | null {
     }
 }
 
+/** Finds a pure 3-note voicing (one note per pitch class, no doubled root/octave) in standard tuning. */
+export function generate3NoteVoicing(chord: Chord): GuitarVoicing | null {
+    if (chord.tones.length !== 3) return null
+    let best: { placements: Placement[]; fingers: number[]; score: number } | null = null
+
+    // Sets of 3 strings: adjacent string sets and common string sets with bass
+    const stringSets = [
+        [3, 4, 5], // strings 3, 2, 1
+        [2, 3, 4], // strings 4, 3, 2
+        [1, 2, 3], // strings 5, 4, 3
+        [0, 1, 2], // strings 6, 5, 4
+        [0, 2, 3],
+        [0, 3, 4],
+        [1, 3, 4],
+        [1, 4, 5],
+        [0, 4, 5],
+    ]
+
+    for (const [s0, s1, s2] of stringSets) {
+        const bassOptions = placementsOnString(s0, [chord.bass])
+        const bOptions = placementsOnString(s1, chord.tones)
+        const cOptions = placementsOnString(s2, chord.tones)
+
+        for (const bass of bassOptions) {
+            for (const b of bOptions) {
+                if (b.midi <= bass.midi) continue
+                if (b.tone === bass.tone) continue
+                for (const c of cOptions) {
+                    if (c.midi <= b.midi) continue
+                    if (c.tone === bass.tone || c.tone === b.tone) continue
+
+                    const placements = [bass, b, c]
+                    const frets = placements.filter((p) => p.fret > 0).map((p) => p.fret)
+                    if (frets.length && Math.max(...frets) - Math.min(...frets) > MAX_SPAN) continue
+
+                    const fingers = assignFingerings(placements)
+                    if (!fingers) continue
+
+                    const score = scoreVoicing(placements, chord)
+                    if (!best || score < best.score) best = { placements, fingers, score }
+                }
+            }
+        }
+    }
+
+    if (!best) return null
+    return {
+        notes: best.placements.map(spell),
+        fingerings: best.fingers.map(String),
+    }
+}
+
 const cache = new Map<string, GuitarVoicing | null>()
 
-export function voiceChord(chord: Chord): GuitarVoicing | null {
-    const cacheKey = `${chord.tones.join(' ')}/${chord.bass}`
-    if (!cache.has(cacheKey)) cache.set(cacheKey, generateVoicing(chord))
+export function voiceChord(chord: Chord, options?: { threeNote?: boolean }): GuitarVoicing | null {
+    const isThree = Boolean(options?.threeNote && chord.tones.length === 3)
+    const cacheKey = `${chord.tones.join(' ')}/${chord.bass}/${isThree ? '3' : '4'}`
+    if (!cache.has(cacheKey)) {
+        let result: GuitarVoicing | null = null
+        if (isThree) {
+            result = generate3NoteVoicing(chord)
+        }
+        if (!result) {
+            result = generateVoicing(chord)
+        }
+        cache.set(cacheKey, result)
+    }
     return cache.get(cacheKey) ?? null
 }

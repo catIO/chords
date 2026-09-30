@@ -32,6 +32,16 @@ describe('generated voicings', () => {
         expect(voicing?.notes[0].replace(/\d/, '')).toBe('E')
     })
 
+    it('generates pure 3-note triad voicings without doubled octaves', () => {
+        const dTriad = voiceChord(diatonicChord('D', 'major', 0), { threeNote: true })
+        expect(dTriad?.notes).toHaveLength(3)
+        expect(dTriad?.notes.map((n) => n.replace(/\d/, ''))).toEqual(['D', 'F#', 'A'])
+
+        const cTriad = voiceChord(diatonicChord('C', 'major', 0), { threeNote: true })
+        expect(cTriad?.notes).toHaveLength(3)
+        expect(cTriad?.notes[0].replace(/\d/, '')).toBe('C')
+    })
+
     it('voices every chord the drill can produce', () => {
         const pool = buildChordPool({
             keys: curriculumKeys(curriculum),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import curriculumData from '../data/royal_conservatory_pwa_chords.json'
 import { curriculumSchema } from '../types/curriculum'
 import { parsePitchSpelling } from './noteUtils'
-import { buildScale, chromaticChord, diatonicChord, pitchClass, type Chord, type ScaleType } from './theory'
+import { buildScale, chromaticChord, diatonicChord, diatonicCloseNotes, pitchClass, type Chord, type ScaleType } from './theory'
 
 const curriculum = curriculumSchema.parse(curriculumData)
 
@@ -99,3 +99,21 @@ describe('agreement with the RCM curriculum', () => {
         }
     })
 })
+
+describe('diatonicCloseNotes', () => {
+    it('builds exact textbook close-position triads for C major ascending on treble staff', () => {
+        expect(diatonicCloseNotes('C', 'major', 0)).toEqual(['C4', 'E4', 'G4'])
+        expect(diatonicCloseNotes('C', 'major', 1)).toEqual(['D4', 'F4', 'A4'])
+        expect(diatonicCloseNotes('C', 'major', 2)).toEqual(['E4', 'G4', 'B4'])
+        expect(diatonicCloseNotes('C', 'major', 3)).toEqual(['F4', 'A4', 'C5'])
+        expect(diatonicCloseNotes('C', 'major', 4)).toEqual(['G4', 'B4', 'D5'])
+        expect(diatonicCloseNotes('C', 'major', 5)).toEqual(['A4', 'C5', 'E5'])
+        expect(diatonicCloseNotes('C', 'major', 6)).toEqual(['B4', 'D5', 'F5'])
+    })
+
+    it('builds inversions correctly in close position', () => {
+        expect(diatonicCloseNotes('C', 'major', 0, { inversion: 1 })).toEqual(['E4', 'G4', 'C5'])
+        expect(diatonicCloseNotes('C', 'major', 0, { inversion: 2 })).toEqual(['G4', 'C5', 'E5'])
+    })
+})
+
