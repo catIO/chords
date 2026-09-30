@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import curriculumData from '../data/royal_conservatory_pwa_chords.json'
 import { curriculumSchema } from '../types/curriculum'
-import { buildChordPool, buildVocabulary } from '../features/drill/drill'
+import { buildChordPool, buildScaleSequence, buildVocabulary } from '../features/drill/drill'
 import { curriculumKeys } from '../features/drill/keys'
-import { generateVoicing, voiceChord } from './guitarVoicings'
+import { generateVoicing, voiceChord, voiceWithRisingBass } from './guitarVoicings'
 import { parsePitchSpelling } from './noteUtils'
 import { diatonicChord, pitchClass } from './theory'
 
@@ -32,14 +32,28 @@ describe('generated voicings', () => {
         expect(voicing?.notes[0].replace(/\d/, '')).toBe('E')
     })
 
-    it('generates pure 3-note triad voicings without doubled octaves', () => {
-        const dTriad = voiceChord(diatonicChord('D', 'major', 0), { threeNote: true })
-        expect(dTriad?.notes).toHaveLength(3)
-        expect(dTriad?.notes.map((n) => n.replace(/\d/, ''))).toEqual(['D', 'F#', 'A'])
-
-        const cTriad = voiceChord(diatonicChord('C', 'major', 0), { threeNote: true })
-        expect(cTriad?.notes).toHaveLength(3)
-        expect(cTriad?.notes[0].replace(/\d/, '')).toBe('C')
+    it('gives the chords of a scale a bass that rises by step', () => {
+        const steps = (chords: ReturnType<typeof diatonicChord>[]) => {
+            const basses = voiceWithRisingBass(chords).map((v) => (v ? midi(v.notes[0]) : NaN))
+            return basses.slice(1).map((b, i) => b - basses[i])
+        }
+        const isStep = (s: number) => s >= 1 && s <= 3
+        const strict: string[] = []
+        const loose: string[] = []
+        for (const key of curriculumKeys(curriculum)) {
+            for (const chordTypes of [['triads'], ['sevenths']] as const) {
+                for (const inversion of [0, 1, 2]) {
+                    const chords = buildScaleSequence(key, 'all', ['harmonic'], [inversion], [...chordTypes]).map((i) => i.chord)
+                    const s = steps(chords)
+                    const label = `${key.id} ${chordTypes[0]} inv${inversion}: ${s.join(',')}`
+                    if (chordTypes[0] === 'triads' && inversion === 0 && !s.every(isStep)) strict.push(label)
+                    // Past the guitar's bass range the line may drop an octave once
+                    if (s.filter((x) => !Number.isNaN(x) && !isStep(x)).length > 1) loose.push(label)
+                }
+            }
+        }
+        expect(strict).toEqual([])
+        expect(loose).toEqual([])
     })
 
     it('voices every chord the drill can produce', () => {

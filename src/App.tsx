@@ -108,7 +108,7 @@ function PracticeApp() {
         >
           <Container maxWidth="md">
             <Toolbar disableGutters>
-              <ChordLogoIcon sx={{ mr: 1.25, fontSize: 28 }} />
+              <ChordLogoIcon sx={{ mr: 1.25, fontSize: 28, color: 'primary.main' }} />
               <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
                 Chord Practice
               </Typography>
@@ -195,7 +195,7 @@ function PracticeApp() {
                   />
                 </>
               ) : (
-                <ChordDrillPanel curriculum={appCurriculum} grade={grade} onGradeChange={setGrade} />
+                <ChordDrillPanel curriculum={appCurriculum} />
               )}
             </Stack>
           </Paper>

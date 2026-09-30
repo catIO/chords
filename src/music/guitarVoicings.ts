@@ -93,13 +93,15 @@ function assignFingerings(placements: Placement[]): number[] | null {
     return fingers.every((f) => f <= 4) ? fingers : null
 }
 
-function scoreVoicing(placements: Placement[], chord: Chord): number {
+function scoreVoicing(placements: Placement[], chord: Chord, bassMidi?: number): number {
     const frets = placements.filter((p) => p.fret > 0).map((p) => p.fret)
     const minFret = frets.length ? Math.min(...frets) : 0
     const span = frets.length ? Math.max(...frets) - minFret : 0
     const count = (tone: string) => placements.filter((p) => p.tone === tone).length
 
     let score = minFret + span * 0.6 + (span === MAX_SPAN ? 1 : 0) + frets.length * 0.4 + placements[0].stringIdx * 0.3
+    // Large enough that an octave off always loses to the requested bass when one is playable
+    if (bassMidi !== undefined) score += Math.abs(placements[0].midi - bassMidi) * 5
     // Avoid doubling a major third (often the leading tone); doubling the bass of N6 is standard
     const majorThird = ['major', 'augmented', 'dominant7'].includes(chord.quality) && chord.romanNumeral !== 'N6'
     if (majorThird && count(chord.tones[1]) > 1) score += 6
@@ -111,7 +113,7 @@ function scoreVoicing(placements: Placement[], chord: Chord): number {
 }
 
 /** Finds the easiest four-note, thumb-plus-three-fingers voicing in standard tuning. */
-export function generateVoicing(chord: Chord): GuitarVoicing | null {
+export function generateVoicing(chord: Chord, bassMidi?: number): GuitarVoicing | null {
     // The fifth of a seventh chord may be omitted
     const required = chord.tones.filter((_, i) => !(chord.tones.length === 4 && i === 2))
     let best: { placements: Placement[]; fingers: number[]; score: number } | null = null
@@ -134,7 +136,7 @@ export function generateVoicing(chord: Chord): GuitarVoicing | null {
                             if (!required.every((tone) => placements.some((p) => p.tone === tone))) continue
                             const fingers = assignFingerings(placements)
                             if (!fingers) continue
-                            const score = scoreVoicing(placements, chord)
+                            const score = scoreVoicing(placements, chord, bassMidi)
                             if (!best || score < best.score) best = { placements, fingers, score }
                         }
                     }
@@ -150,72 +152,24 @@ export function generateVoicing(chord: Chord): GuitarVoicing | null {
     }
 }
 
-/** Finds a pure 3-note voicing (one note per pitch class, no doubled root/octave) in standard tuning. */
-export function generate3NoteVoicing(chord: Chord): GuitarVoicing | null {
-    if (chord.tones.length !== 3) return null
-    let best: { placements: Placement[]; fingers: number[]; score: number } | null = null
-
-    // Sets of 3 strings: adjacent string sets and common string sets with bass
-    const stringSets = [
-        [3, 4, 5], // strings 3, 2, 1
-        [2, 3, 4], // strings 4, 3, 2
-        [1, 2, 3], // strings 5, 4, 3
-        [0, 1, 2], // strings 6, 5, 4
-        [0, 2, 3],
-        [0, 3, 4],
-        [1, 3, 4],
-        [1, 4, 5],
-        [0, 4, 5],
-    ]
-
-    for (const [s0, s1, s2] of stringSets) {
-        const bassOptions = placementsOnString(s0, [chord.bass])
-        const bOptions = placementsOnString(s1, chord.tones)
-        const cOptions = placementsOnString(s2, chord.tones)
-
-        for (const bass of bassOptions) {
-            for (const b of bOptions) {
-                if (b.midi <= bass.midi) continue
-                if (b.tone === bass.tone) continue
-                for (const c of cOptions) {
-                    if (c.midi <= b.midi) continue
-                    if (c.tone === bass.tone || c.tone === b.tone) continue
-
-                    const placements = [bass, b, c]
-                    const frets = placements.filter((p) => p.fret > 0).map((p) => p.fret)
-                    if (frets.length && Math.max(...frets) - Math.min(...frets) > MAX_SPAN) continue
-
-                    const fingers = assignFingerings(placements)
-                    if (!fingers) continue
-
-                    const score = scoreVoicing(placements, chord)
-                    if (!best || score < best.score) best = { placements, fingers, score }
-                }
-            }
-        }
-    }
-
-    if (!best) return null
-    return {
-        notes: best.placements.map(spell),
-        fingerings: best.fingers.map(String),
-    }
-}
-
 const cache = new Map<string, GuitarVoicing | null>()
 
-export function voiceChord(chord: Chord, options?: { threeNote?: boolean }): GuitarVoicing | null {
-    const isThree = Boolean(options?.threeNote && chord.tones.length === 3)
-    const cacheKey = `${chord.tones.join(' ')}/${chord.bass}/${isThree ? '3' : '4'}`
+export function voiceChord(chord: Chord, options?: { bassMidi?: number }): GuitarVoicing | null {
+    const bassMidi = options?.bassMidi
+    const cacheKey = `${chord.tones.join(' ')}/${chord.bass}/${bassMidi ?? ''}`
     if (!cache.has(cacheKey)) {
-        let result: GuitarVoicing | null = null
-        if (isThree) {
-            result = generate3NoteVoicing(chord)
-        }
-        if (!result) {
-            result = generateVoicing(chord)
-        }
-        cache.set(cacheKey, result)
+        cache.set(cacheKey, generateVoicing(chord, bassMidi))
     }
     return cache.get(cacheKey) ?? null
+}
+
+/** Voices chords so the bass rises stepwise from the lowest playable tonic, e.g. the chords of a scale. */
+export function voiceWithRisingBass(chords: Chord[]): (GuitarVoicing | null)[] {
+    let previousBass = OPEN_STRINGS[0] - 1
+    return chords.map((chord) => {
+        let bassMidi = previousBass + 1
+        while (bassMidi % 12 !== pitchClass(chord.bass)) bassMidi++
+        previousBass = bassMidi
+        return voiceChord(chord, { bassMidi })
+    })
 }

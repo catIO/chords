@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import curriculumData from '../data/royal_conservatory_pwa_chords.json'
 import { curriculumSchema } from '../types/curriculum'
 import { parsePitchSpelling } from './noteUtils'
-import { buildScale, chromaticChord, diatonicChord, diatonicCloseNotes, pitchClass, type Chord, type ScaleType } from './theory'
+import { buildScale, chromaticChord, closePositionNotes, diatonicChord, diatonicCloseNotes, pitchClass, type Chord, type ScaleType } from './theory'
 
 const curriculum = curriculumSchema.parse(curriculumData)
 
@@ -65,6 +65,15 @@ describe('diatonic chords', () => {
         expect(diatonicChord('C', 'major', 6, { seventh: true }).symbol).toBe('Bm7b5')
         expect(diatonicChord('C', 'major', 1, { seventh: true }).symbol).toBe('Dm7')
     })
+
+    it('builds the harmonic minor i and III seventh chords', () => {
+        const i7 = diatonicChord('A', 'harmonic', 0, { seventh: true })
+        expect(i7.symbol).toBe('Am(maj7)')
+        expect(i7.romanNumeral).toBe('iM7')
+        const iii7 = diatonicChord('A', 'harmonic', 2, { seventh: true })
+        expect(iii7.symbol).toBe('C+maj7')
+        expect(iii7.romanNumeral).toBe('III+M7')
+    })
 })
 
 describe('chromatic chords', () => {
@@ -114,6 +123,15 @@ describe('diatonicCloseNotes', () => {
     it('builds inversions correctly in close position', () => {
         expect(diatonicCloseNotes('C', 'major', 0, { inversion: 1 })).toEqual(['E4', 'G4', 'C5'])
         expect(diatonicCloseNotes('C', 'major', 0, { inversion: 2 })).toEqual(['G4', 'C5', 'E5'])
+    })
+})
+
+describe('closePositionNotes', () => {
+    it('stacks any chord tightly above its bass', () => {
+        expect(closePositionNotes(diatonicChord('C', 'major', 0, { inversion: 1 }))).toEqual(['E4', 'G4', 'C5'])
+        expect(closePositionNotes(diatonicChord('C', 'major', 4, { seventh: true, inversion: 3 }))).toEqual(['F4', 'G4', 'B4', 'D5'])
+        expect(closePositionNotes(diatonicChord('A', 'harmonic', 0))).toEqual(['A3', 'C4', 'E4'])
+        expect(closePositionNotes(chromaticChord('C', 'N6'))).toEqual(['F4', 'Ab4', 'Db5'])
     })
 })
 

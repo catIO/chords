@@ -11,33 +11,32 @@ import {
     Stack,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
     Typography,
 } from '@mui/material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import type { ChordEvent, Curriculum } from '../../types/curriculum'
-import { gradeDisplayName, gradeOptions } from '../../data/curriculum'
 import { ChordStaff } from '../../components/ChordStaff'
-import { voiceChord } from '../../music/guitarVoicings'
+import { voiceChord, voiceWithRisingBass } from '../../music/guitarVoicings'
 import { toVexKeySignature } from '../../music/noteUtils'
-import { MINOR_FORM_LABEL, type MinorForm } from '../../music/theory'
+import { MINOR_FORM_LABEL, closePositionNotes, type MinorForm } from '../../music/theory'
 import {
     buildChordPool,
     buildScaleSequence,
     buildVocabulary,
     pickChord,
+    resolveChordOptions,
     type ChordFocus,
     type ChordType,
     type DrillEntry,
 } from './drill'
 import { loadDrillSettings, saveDrillSettings, type DrillSettings } from './drillSettings'
-import { curriculumKeys, keysForGrades, type KeyChoice } from './keys'
+import { curriculumKeys, KEY_TIERS, keysForTier, type KeyChoice, type KeyTier } from './keys'
 
 interface ChordDrillPanelProps {
     curriculum: Curriculum
-    grade?: string
-    onGradeChange?: (grade: string) => void
 }
 
 const PRIMARY_MINOR_FORMS: { value: MinorForm; label: string }[] = [
@@ -51,10 +50,24 @@ const CHORD_FOCUS_OPTIONS: { value: ChordFocus; label: string }[] = [
     { value: 'all', label: 'All degrees' },
 ]
 
-const CHORD_TYPES: { value: ChordType; label: string }[] = [
-    { value: 'triads', label: 'Triads' },
-    { value: 'sevenths', label: 'ii7 · V7 · vii7' },
-    { value: 'chromatic', label: 'V7/V · N6' },
+const CHORD_TYPES: { value: ChordType; label: string; tooltip: string }[] = [
+    {
+        value: 'triads',
+        label: 'Triads',
+        tooltip: 'Three notes stacked in thirds: root, 3rd, 5th. In C major: C (C E G), Dm (D F A), G (G B D).',
+    },
+    {
+        value: 'sevenths',
+        label: '7th chords',
+        tooltip:
+            'A triad plus the 7th above the root. Drills ii7, V7 and vii7 — in C major: Dm7 (D F A C), G7 (G B D F), Bø7 (B D F A). With Cadence focus only V7 is used.',
+    },
+    {
+        value: 'chromatic',
+        label: 'Chromatic',
+        tooltip:
+            'Chords using notes outside the key. V7/V, the dominant of the dominant: D7 in C, leading to G. N6, the Neapolitan sixth: D♭/F in C, leading to V. Requires Single chord flashcard with All degrees.',
+    },
 ]
 
 const INVERSIONS = [
@@ -102,16 +115,35 @@ function KeyChips({
     )
 }
 
-export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChange }: ChordDrillPanelProps) {
+export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
     const allCurriculumKeys = useMemo(() => curriculumKeys(curriculum), [curriculum])
 
     const [settings, setSettings] = useState<DrillSettings>(() =>
-        loadDrillSettings(allCurriculumKeys.map((k) => k.id), externalGrade ?? 'all'),
+        loadDrillSettings(allCurriculumKeys.map((k) => k.id)),
     )
 
-    const selectedGrades = useMemo(() => settings.selectedGrades ?? [], [settings.selectedGrades])
+    const tierKeyIds = useMemo(
+        () => new Map(KEY_TIERS.map((t) => [t.value, keysForTier(curriculum, t.value).map((k) => k.id)])),
+        [curriculum],
+    )
+
+    // Derived rather than stored, so editing individual keys shows as a custom set.
+    const activeTier = useMemo(() => {
+        const selected = new Set(settings.keyIds)
+        return KEY_TIERS.find((t) => {
+            const ids = tierKeyIds.get(t.value) ?? []
+            return ids.length === selected.size && ids.every((id) => selected.has(id))
+        }) ?? null
+    }, [settings.keyIds, tierKeyIds])
 
     const update = (patch: Partial<DrillSettings>) => setSettings((s) => ({ ...s, ...patch }))
+
+    const displayMode = settings.displayMode ?? 'sequence'
+    const focus = settings.chordFocus ?? 'cadence'
+    const chordOptions = useMemo(
+        () => resolveChordOptions(displayMode, focus, settings.chordTypes, settings.inversions),
+        [displayMode, focus, settings.chordTypes, settings.inversions],
+    )
 
     const activeKey = useMemo(() => {
         const selectedKeys = allCurriculumKeys.filter((k) => settings.keyIds.includes(k.id))
@@ -162,66 +194,23 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
         }
     }
 
-    const handleChordTypesChange = (newTypes: ChordType[]) => {
-        if (newTypes.length === 0) return
-        const patch: Partial<DrillSettings> = { chordTypes: newTypes }
-        if (!newTypes.includes('sevenths') && settings.inversions.includes(3)) {
-            const newInvs = settings.inversions.filter((i) => i !== 3)
-            patch.inversions = newInvs.length > 0 ? newInvs : [0]
-        }
-        update(patch)
+    const handleChordTypesChange = (value: ChordType | ChordType[] | null) => {
+        const types = value === null ? [] : Array.isArray(value) ? value : [value]
+        if (types.length > 0) update({ chordTypes: types })
     }
 
-    const handleInversionsChange = (newInvs: number[]) => {
-        if (newInvs.length === 0) return
-        const validInvs = !settings.chordTypes.includes('sevenths')
-            ? newInvs.filter((i) => i !== 3)
-            : newInvs
-        if (validInvs.length > 0) {
-            update({ inversions: validInvs })
-        }
+    const handleInversionsChange = (value: number | number[] | null) => {
+        const invs = value === null ? [] : Array.isArray(value) ? value : [value]
+        if (invs.length > 0) update({ inversions: invs })
     }
 
-    const toggleGrade = (gradeToToggle: string) => {
-        const isCurrentlySelected = selectedGrades.includes(gradeToToggle)
-        const newSelectedGrades = isCurrentlySelected
-            ? selectedGrades.filter((g) => g !== gradeToToggle)
-            : [...selectedGrades, gradeToToggle]
-
-        if (!isCurrentlySelected) {
-            const keysOfNewGrade = keysForGrades(curriculum, [gradeToToggle]).map((k) => k.id)
-            const combinedKeyIds = Array.from(new Set([...settings.keyIds, ...keysOfNewGrade]))
-            update({
-                selectedGrades: newSelectedGrades,
-                keyIds: combinedKeyIds,
-                activeKeyId: keysOfNewGrade[0] ?? settings.activeKeyId,
-            })
-            if (onGradeChange) onGradeChange(gradeToToggle)
-        } else {
-            const remainingGradeKeys = new Set(keysForGrades(curriculum, newSelectedGrades).map((k) => k.id))
-            const removedGradeKeys = new Set(keysForGrades(curriculum, [gradeToToggle]).map((k) => k.id))
-            const updatedKeyIds = settings.keyIds.filter(
-                (id) => !removedGradeKeys.has(id) || remainingGradeKeys.has(id),
-            )
-            update({
-                selectedGrades: newSelectedGrades,
-                keyIds: updatedKeyIds,
-            })
-        }
+    const selectTier = (tier: KeyTier) => {
+        const keyIds = tierKeyIds.get(tier) ?? []
+        update({ keyIds, activeKeyId: keyIds[0] })
     }
 
-    const selectAllGrades = () => {
-        update({
-            selectedGrades: gradeOptions,
-            keyIds: allCurriculumKeys.map((k) => k.id),
-        })
-    }
-
-    const clearGrades = () => {
-        update({
-            selectedGrades: [],
-            keyIds: [],
-        })
+    const clearKeys = () => {
+        update({ keyIds: [] })
     }
 
     const [roll, setRoll] = useState(() => ({ value: Math.random(), previousId: null as string | null, count: 1 }))
@@ -230,8 +219,8 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
         saveDrillSettings(settings)
     }, [settings])
 
-    const isThreeNote = (settings.triadVoicing ?? '3-note') === '3-note'
-    const useGuitarVoicings = settings.triadVoicing === '4-note'
+    const useGuitarVoicings = settings.voicing === 'guitar'
+    const voicingSummary = useGuitarVoicings ? 'Guitar voicing' : 'Close position'
 
     // Full sequence for active key
     const sequenceChords = useMemo(
@@ -239,20 +228,26 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
             activeKey
                 ? buildScaleSequence(
                     activeKey,
-                    settings.chordFocus ?? 'cadence',
+                    focus,
                     settings.minorForms,
-                    settings.inversions,
-                    settings.chordTypes,
+                    chordOptions.inversions,
+                    chordOptions.chordTypes,
                 )
                 : [],
-        [activeKey, settings.chordFocus, settings.minorForms, settings.inversions, settings.chordTypes],
+        [activeKey, focus, settings.minorForms, chordOptions],
     )
 
     const sequenceEvents: ChordEvent[] = useMemo(() => {
+        const chords = sequenceChords.map((item) => item.chord)
+        const voicings = !useGuitarVoicings
+            ? []
+            : focus === 'all'
+                ? voiceWithRisingBass(chords)
+                : chords.map((chord) => voiceChord(chord))
         const events: ChordEvent[] = []
-        for (const item of sequenceChords) {
+        sequenceChords.forEach((item, idx) => {
             if (useGuitarVoicings) {
-                const v = voiceChord(item.chord, { threeNote: false })
+                const v = voicings[idx]
                 if (v) {
                     events.push({
                         id: item.id,
@@ -274,9 +269,9 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                     beatUnit: 4,
                 })
             }
-        }
+        })
         return events
-    }, [sequenceChords, useGuitarVoicings])
+    }, [sequenceChords, useGuitarVoicings, focus])
 
     // Single chord pool for flashcard mode
     const pool = useMemo(
@@ -284,10 +279,10 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
             buildChordPool({
                 keys: allCurriculumKeys.filter((k) => settings.keyIds.includes(k.id)),
                 minorForms: settings.minorForms,
-                vocabulary: buildVocabulary(settings.chordTypes, settings.inversions, settings.chordFocus ?? 'cadence'),
-                weighting: settings.weighting,
+                vocabulary: buildVocabulary(chordOptions.chordTypes, chordOptions.inversions, focus),
+                weighting: 'common',
             }),
-        [allCurriculumKeys, settings.keyIds, settings.minorForms, settings.chordTypes, settings.inversions, settings.chordFocus, settings.weighting],
+        [allCurriculumKeys, settings.keyIds, settings.minorForms, chordOptions, focus],
     )
 
     const current: DrillEntry | null = useMemo(
@@ -296,8 +291,8 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
     )
 
     const singleVoicing = useMemo(
-        () => (current ? voiceChord(current.chord, { threeNote: isThreeNote }) : null),
-        [current, isThreeNote],
+        () => (current && useGuitarVoicings ? voiceChord(current.chord) : null),
+        [current, useGuitarVoicings],
     )
 
     const next = () => {
@@ -324,57 +319,44 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
         return () => window.removeEventListener('keydown', handleKey)
     })
 
-    const flashcardStaffEvents: ChordEvent[] | null = useMemo(
-        () =>
-            current && singleVoicing
-                ? [
-                    {
-                        id: current.id,
-                        romanNumeral: current.chord.romanNumeral,
-                        symbol: current.chord.symbol,
-                        notes: singleVoicing.notes,
-                        durationBeats: 4,
-                        beatUnit: 4,
-                        fingerings: singleVoicing.fingerings,
-                    },
-                ]
-                : null,
-        [current, singleVoicing],
-    )
+    const flashcardStaffEvents: ChordEvent[] | null = useMemo(() => {
+        if (!current) return null
+        const event = {
+            id: current.id,
+            romanNumeral: current.chord.romanNumeral,
+            symbol: current.chord.symbol,
+            durationBeats: 4,
+            beatUnit: 4,
+        }
+        if (!useGuitarVoicings) return [{ ...event, notes: closePositionNotes(current.chord) }]
+        return singleVoicing ? [{ ...event, notes: singleVoicing.notes, fingerings: singleVoicing.fingerings }] : null
+    }, [current, singleVoicing, useGuitarVoicings])
 
-    const levelsSummary = useMemo(() => {
-        if (selectedGrades.length === 0) return 'Custom keys'
-        if (selectedGrades.length === gradeOptions.length) return 'All levels'
-        return `Levels ${selectedGrades.map((g) => (g === 'Preparatory' ? 'Prep' : g)).join(', ')}`
-    }, [selectedGrades])
+    const keySetSummary = activeTier ? `${activeTier.label} keys` : 'Custom keys'
 
     const focusSummary = useMemo(() => {
-        const focus = settings.chordFocus ?? 'cadence'
         if (focus === 'tonic') return 'Tonic only'
         if (focus === 'all') return 'All degrees'
         return 'Cadence (tonic–dominant–tonic)'
-    }, [settings.chordFocus])
+    }, [focus])
 
     const hasSelectedMinorKey = useMemo(
         () => allCurriculumKeys.some((k) => k.mode === 'minor' && settings.keyIds.includes(k.id)),
         [allCurriculumKeys, settings.keyIds],
     )
-    const showMinorHarmony = hasSelectedMinorKey && (settings.chordFocus ?? 'cadence') === 'all'
+    const showMinorHarmony = hasSelectedMinorKey && focus === 'all'
 
-    const displayMode = settings.displayMode ?? 'sequence'
-
-    const settingsSummary = useMemo(() => {
-        const parts = [
-            levelsSummary,
-            `${settings.keyIds.length} ${settings.keyIds.length === 1 ? 'scale' : 'scales'}`,
-            focusSummary,
-            displayMode === 'sequence' ? 'Sequence view' : 'Flashcard',
-        ]
-        if (settings.chordTypes.includes('triads')) {
-            parts.push(isThreeNote ? '3-note triads' : '4-note voicings')
-        }
-        return parts.join(' · ')
-    }, [levelsSummary, settings.keyIds.length, focusSummary, displayMode, settings.chordTypes, isThreeNote])
+    const settingsSummary = useMemo(
+        () =>
+            [
+                keySetSummary,
+                `${settings.keyIds.length} ${settings.keyIds.length === 1 ? 'scale' : 'scales'}`,
+                focusSummary,
+                displayMode === 'sequence' ? 'Sequence view' : 'Flashcard',
+                voicingSummary,
+            ].join(' · '),
+        [keySetSummary, settings.keyIds.length, focusSummary, displayMode, voicingSummary],
+    )
 
     return (
         <Stack spacing={2}>
@@ -389,38 +371,42 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                 </AccordionSummary>
                 <AccordionDetails>
                     <Stack spacing={2.5}>
-                        {/* Section 1: Curriculum Levels */}
+                        {/* Display format comes first: it decides which chord options apply below */}
                         <Stack spacing={1}>
-                            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="subtitle2">Curriculum levels</Typography>
-                                <Stack direction="row" spacing={1}>
-                                    <Button size="small" onClick={selectAllGrades}>
-                                        All levels
-                                    </Button>
-                                    <Button size="small" onClick={() => update({ selectedGrades: [] })}>
-                                        Deselect levels
-                                    </Button>
-                                </Stack>
-                            </Stack>
-                            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                                {gradeOptions.map((g) => {
-                                    const isSelected = selectedGrades.includes(g)
-                                    return (
-                                        <Chip
-                                            key={g}
-                                            label={gradeDisplayName(g)}
-                                            size="small"
-                                            color={isSelected ? 'primary' : 'default'}
-                                            variant={isSelected ? 'filled' : 'outlined'}
-                                            onClick={() => toggleGrade(g)}
-                                            aria-pressed={isSelected}
-                                        />
-                                    )
-                                })}
-                            </Stack>
+                            <Typography variant="subtitle2">Display format</Typography>
+                            <ToggleButtonGroup
+                                value={displayMode}
+                                exclusive
+                                onChange={(_, value) => value && update({ displayMode: value })}
+                                aria-label="Display format"
+                                size="small"
+                                fullWidth
+                            >
+                                <ToggleButton value="sequence">Scale sequence (all chords at once)</ToggleButton>
+                                <ToggleButton value="flashcard">Single chord flashcard</ToggleButton>
+                            </ToggleButtonGroup>
                         </Stack>
 
-                        {/* Section 2: Major & Minor Keys */}
+                        {/* Key set */}
+                        <Stack spacing={1}>
+                            <Typography variant="subtitle2">Key set</Typography>
+                            <ToggleButtonGroup
+                                value={activeTier?.value ?? null}
+                                exclusive
+                                onChange={(_, value: KeyTier | null) => value && selectTier(value)}
+                                aria-label="Key set"
+                                size="small"
+                                fullWidth
+                            >
+                                {KEY_TIERS.map((tier) => (
+                                    <ToggleButton key={tier.value} value={tier.value}>
+                                        {tier.label} ({tierKeyIds.get(tier.value)?.length ?? 0})
+                                    </ToggleButton>
+                                ))}
+                            </ToggleButtonGroup>
+                        </Stack>
+
+                        {/* Major & Minor Keys */}
                         <Stack spacing={1}>
                             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="subtitle2">Major keys</Typography>
@@ -428,7 +414,7 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                                     <Button size="small" onClick={() => update({ keyIds: allCurriculumKeys.map((k) => k.id) })}>
                                         All keys
                                     </Button>
-                                    <Button size="small" onClick={clearGrades}>
+                                    <Button size="small" onClick={clearKeys}>
                                         Clear
                                     </Button>
                                 </Stack>
@@ -447,27 +433,11 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                             />
                         </Stack>
 
-                        {/* Section 3: Display Mode */}
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle2">Display format</Typography>
-                            <ToggleButtonGroup
-                                value={displayMode}
-                                exclusive
-                                onChange={(_, value) => value && update({ displayMode: value })}
-                                aria-label="Display format"
-                                size="small"
-                                fullWidth
-                            >
-                                <ToggleButton value="sequence">Scale sequence (all chords at once)</ToggleButton>
-                                <ToggleButton value="flashcard">Single chord flashcard</ToggleButton>
-                            </ToggleButtonGroup>
-                        </Stack>
-
-                        {/* Section 4: Harmony Focus */}
+                        {/* Harmony Focus */}
                         <Stack spacing={1}>
                             <Typography variant="subtitle2">Harmony focus</Typography>
                             <ToggleButtonGroup
-                                value={settings.chordFocus ?? 'cadence'}
+                                value={focus}
                                 exclusive
                                 onChange={(_, value: ChordFocus | null) => value && update({ chordFocus: value })}
                                 aria-label="Harmony focus"
@@ -482,70 +452,87 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                             </ToggleButtonGroup>
                         </Stack>
 
-                        {/* Section 5: Chord Types */}
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle2">Chords</Typography>
-                            <ToggleButtonGroup
-                                value={settings.chordTypes}
-                                onChange={(_, value: ChordType[]) => handleChordTypesChange(value)}
-                                aria-label="Chords"
-                                size="small"
-                                fullWidth
-                            >
-                                {CHORD_TYPES.map((type) => {
-                                    const isDisabled = type.value === 'chromatic' && settings.chordFocus !== 'all'
-                                    return (
-                                        <ToggleButton key={type.value} value={type.value} disabled={isDisabled}>
-                                            {type.label}
-                                        </ToggleButton>
-                                    )
-                                })}
-                            </ToggleButtonGroup>
-                        </Stack>
-
-                        {/* Section 6: Triad Voicing Texture (only applies when Triads are selected) */}
-                        {settings.chordTypes.includes('triads') && (
-                            <Stack spacing={0.75}>
-                                <Typography variant="subtitle2">Triad voicing texture</Typography>
+                        {/* Chord Types (Tonic only always uses triads) */}
+                        {focus !== 'tonic' && (
+                            <Stack spacing={1}>
+                                <Typography variant="subtitle2">Chords</Typography>
                                 <ToggleButtonGroup
-                                    value={settings.triadVoicing ?? '3-note'}
-                                    exclusive
-                                    onChange={(_, value) => value && update({ triadVoicing: value })}
-                                    aria-label="Triad voicing texture"
+                                    value={chordOptions.singleChoice ? chordOptions.chordTypes[0] : chordOptions.chordTypes}
+                                    exclusive={chordOptions.singleChoice}
+                                    onChange={(_, value: ChordType | ChordType[] | null) => handleChordTypesChange(value)}
+                                    aria-label="Chords"
                                     size="small"
                                     fullWidth
                                 >
-                                    <ToggleButton value="3-note">3 notes (pure triad: 1 · 3 · 5)</ToggleButton>
-                                    <ToggleButton value="4-note">4 notes (classical guitar p-i-m-a)</ToggleButton>
+                                    {CHORD_TYPES.map((type) => (
+                                        // Span wrapper lets the tooltip show on the disabled Chromatic button.
+                                        <Tooltip key={type.value} title={type.tooltip} describeChild enterTouchDelay={400}>
+                                            <Box component="span" sx={{ flex: 1, display: 'flex' }}>
+                                                <ToggleButton
+                                                    value={type.value}
+                                                    disabled={!chordOptions.allowedTypes.includes(type.value)}
+                                                >
+                                                    {type.label}
+                                                </ToggleButton>
+                                            </Box>
+                                        </Tooltip>
+                                    ))}
                                 </ToggleButtonGroup>
-                                <Typography variant="caption" color="text.secondary">
-                                    Triads have 3 notes (root, 3rd, 5th). 4-note voicings double the root or octave across thumb + 3 fingers.
-                                </Typography>
                             </Stack>
                         )}
 
-                        {/* Section 7: Inversions */}
+                        {/* Voicing */}
+                        <Stack spacing={1}>
+                            <Typography variant="subtitle2">Voicing</Typography>
+                            <ToggleButtonGroup
+                                value={settings.voicing ?? 'close'}
+                                exclusive
+                                onChange={(_, value) => value && update({ voicing: value })}
+                                aria-label="Voicing"
+                                size="small"
+                                fullWidth
+                            >
+                                <Tooltip
+                                    title="Every chord tone stacked as tightly as possible on a plain treble staff, e.g. C E G. Shows how the chord is built."
+                                    describeChild
+                                    enterTouchDelay={400}
+                                >
+                                    <ToggleButton value="close">Close position</ToggleButton>
+                                </Tooltip>
+                                <Tooltip
+                                    title="A playable classical guitar shape: thumb on the bass, i-m-a on three higher strings, with left-hand fingerings."
+                                    describeChild
+                                    enterTouchDelay={400}
+                                >
+                                    <ToggleButton value="guitar">Guitar</ToggleButton>
+                                </Tooltip>
+                            </ToggleButtonGroup>
+                        </Stack>
+
+                        {/* Inversions: one at a time in a scale sequence, except Tonic only which shows each */}
                         <Stack spacing={1}>
                             <Typography variant="subtitle2">Inversions</Typography>
                             <ToggleButtonGroup
-                                value={settings.inversions}
-                                onChange={(_, value: number[]) => handleInversionsChange(value)}
+                                value={chordOptions.singleChoice ? chordOptions.inversions[0] : chordOptions.inversions}
+                                exclusive={chordOptions.singleChoice}
+                                onChange={(_, value: number | number[] | null) => handleInversionsChange(value)}
                                 aria-label="Inversions"
                                 size="small"
                                 fullWidth
                             >
-                                {INVERSIONS.map((inversion) => {
-                                    const isDisabled = inversion.value === 3 && !settings.chordTypes.includes('sevenths')
-                                    return (
-                                        <ToggleButton key={inversion.value} value={inversion.value} disabled={isDisabled}>
-                                            {inversion.label}
-                                        </ToggleButton>
-                                    )
-                                })}
+                                {INVERSIONS.map((inversion) => (
+                                    <ToggleButton
+                                        key={inversion.value}
+                                        value={inversion.value}
+                                        disabled={inversion.value > chordOptions.maxInversion}
+                                    >
+                                        {inversion.label}
+                                    </ToggleButton>
+                                ))}
                             </ToggleButtonGroup>
                         </Stack>
 
-                        {/* Section 8: Minor Harmony */}
+                        {/* Minor Harmony */}
                         {showMinorHarmony && (
                             <Stack spacing={1}>
                                 <Typography variant="subtitle2">Minor harmony</Typography>
@@ -565,22 +552,6 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                                 </ToggleButtonGroup>
                             </Stack>
                         )}
-
-                        {/* Section 9: Frequency */}
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle2">Chord frequency</Typography>
-                            <ToggleButtonGroup
-                                value={settings.weighting}
-                                exclusive
-                                onChange={(_, value) => value && update({ weighting: value })}
-                                aria-label="Chord frequency"
-                                size="small"
-                                fullWidth
-                            >
-                                <ToggleButton value="common">Common in repertoire</ToggleButton>
-                                <ToggleButton value="uniform">Equal</ToggleButton>
-                            </ToggleButtonGroup>
-                        </Stack>
                     </Stack>
                 </AccordionDetails>
             </Accordion>
@@ -603,7 +574,7 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                                         {keyName(activeKey)}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {focusSummary} · {isThreeNote ? '3-note pure triads' : '4-note guitar SATB'}
+                                        {focusSummary} · {voicingSummary}
                                     </Typography>
                                 </Stack>
                                 <Button size="small" onClick={nextScale} endIcon={<ChevronRightIcon />}>
@@ -644,7 +615,7 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
 
                             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="body2" color="text.secondary">
-                                    Scale {activeKeyIndex + 1} of {allCurriculumKeys.length}
+                                    Scale {activeKeyIndex + 1} of {settings.keyIds.length}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
                                     Chord {roll.count}
@@ -689,6 +660,8 @@ export function ChordDrillPanel({ curriculum, grade: externalGrade, onGradeChang
                                     <ChordStaff
                                         events={flashcardStaffEvents}
                                         keySignature={toVexKeySignature(current.key.tonic, current.key.mode)}
+                                        showFingerings={useGuitarVoicings}
+                                        clef={useGuitarVoicings ? '8vb' : 'treble'}
                                     />
                                 ) : (
                                     <Typography color="text.secondary">No playable voicing found.</Typography>

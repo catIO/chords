@@ -25,6 +25,22 @@ describe('ChordDrillPanel', () => {
         expect(screen.getByTestId('staff')).toBeInTheDocument()
     })
 
+    it('selects a key tier and shows custom keys after editing it', async () => {
+        render(<ChordDrillPanel curriculum={curriculum} />)
+
+        await userEvent.click(screen.getByText('Practice settings'))
+        const beginner = screen.getByRole('button', { name: 'Beginner (10)' })
+        await userEvent.click(beginner)
+
+        expect(beginner).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByRole('button', { name: 'D major' })).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByRole('button', { name: 'B major' })).toHaveAttribute('aria-pressed', 'false')
+
+        await userEvent.click(screen.getByRole('button', { name: 'B major' }))
+        expect(beginner).toHaveAttribute('aria-pressed', 'false')
+        expect(screen.getByText(/^Custom keys/)).toBeInTheDocument()
+    })
+
     it('asks for a key when none are selected', async () => {
         render(<ChordDrillPanel curriculum={curriculum} />)
 
@@ -122,30 +138,53 @@ describe('ChordDrillPanel', () => {
         expect(screen.getByRole('button', { name: 'Natural' })).toHaveAttribute('aria-pressed', 'true')
     })
 
-    it('only shows Triad voicing texture when Triads is selected in Chords', async () => {
+    it('shows close-position notes on a flashcard and keeps Voicing for 7th chords', async () => {
         render(<ChordDrillPanel curriculum={curriculum} />)
 
-        // Open settings
+        await userEvent.click(screen.getByText('Practice settings'))
+        await userEvent.click(screen.getByRole('button', { name: 'Single chord flashcard' }))
+        expect(screen.getByRole('button', { name: 'Close position' })).toHaveAttribute('aria-pressed', 'true')
+        // Close position on a flashcard is a plain triad: three notes
+        expect(screen.getByTestId('staff').textContent?.split(' ')).toHaveLength(3)
+
+        await userEvent.click(screen.getByRole('button', { name: '7th chords' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Triads' }))
+        expect(screen.getByRole('group', { name: 'Voicing' })).toBeInTheDocument()
+    })
+
+    it('uses one chord type and inversion at a time in a scale sequence', async () => {
+        render(<ChordDrillPanel curriculum={curriculum} />)
         await userEvent.click(screen.getByText('Practice settings'))
 
-        // By default Triads is selected -> Triad voicing texture is visible
-        expect(screen.getByText('Triad voicing texture')).toBeInTheDocument()
+        const triads = screen.getByRole('button', { name: 'Triads' })
+        const sevenths = screen.getByRole('button', { name: '7th chords' })
+        await userEvent.click(sevenths)
+        expect(sevenths).toHaveAttribute('aria-pressed', 'true')
+        expect(triads).toHaveAttribute('aria-pressed', 'false')
+        expect(screen.getByRole('button', { name: 'Chromatic' })).toBeDisabled()
 
-        // Select 7ths as well
-        const seventhsBtn = screen.getByRole('button', { name: 'ii7 · V7 · vii7' })
-        await userEvent.click(seventhsBtn)
+        await userEvent.click(screen.getByRole('button', { name: '2nd inv.' }))
+        expect(screen.getByRole('button', { name: '2nd inv.' })).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByRole('button', { name: 'Root pos.' })).toHaveAttribute('aria-pressed', 'false')
+        // Cadence tonic chords stay triads, so no 3rd inversion
+        expect(screen.getByRole('button', { name: '3rd inv. (7ths)' })).toBeDisabled()
+    })
 
-        // Deselect Triads
-        const triadsBtn = screen.getByRole('button', { name: 'Triads' })
-        await userEvent.click(triadsBtn)
+    it('hides the Chords choice for Tonic only', async () => {
+        render(<ChordDrillPanel curriculum={curriculum} />)
+        await userEvent.click(screen.getByText('Practice settings'))
 
-        // Triad voicing texture should now be hidden
-        expect(screen.queryByText('Triad voicing texture')).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Tonic only' }))
+        expect(screen.queryByRole('group', { name: 'Chords' })).not.toBeInTheDocument()
+    })
 
-        // Re-select Triads
-        await userEvent.click(triadsBtn)
-
-        // Triad voicing texture is visible again
-        expect(screen.getByText('Triad voicing texture')).toBeInTheDocument()
+    it('migrates the old 4-note setting to Guitar voicing', async () => {
+        localStorage.setItem(
+            'scale-chord-practice/drill/v2',
+            JSON.stringify({ keyIds: ['C-major'], triadVoicing: '4-note', minorForms: ['harmonic'], chordTypes: ['triads'], inversions: [0] }),
+        )
+        render(<ChordDrillPanel curriculum={curriculum} />)
+        await userEvent.click(screen.getByText('Practice settings'))
+        expect(screen.getByRole('button', { name: 'Guitar' })).toHaveAttribute('aria-pressed', 'true')
     })
 })

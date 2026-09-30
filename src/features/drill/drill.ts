@@ -13,6 +13,46 @@ import type { KeyChoice } from './keys'
 export type Weighting = 'common' | 'uniform'
 export type ChordType = 'triads' | 'sevenths' | 'chromatic'
 export type ChordFocus = 'cadence' | 'tonic' | 'all'
+export type DisplayMode = 'sequence' | 'flashcard'
+
+export interface ChordOptions {
+    /** Chord types the current display format and focus can use */
+    allowedTypes: ChordType[]
+    chordTypes: ChordType[]
+    inversions: number[]
+    maxInversion: number
+    singleChoice: boolean
+}
+
+/** Chord types and inversions the display format and focus can use; stored selections are kept for other modes. */
+export function resolveChordOptions(
+    displayMode: DisplayMode,
+    focus: ChordFocus,
+    chordTypes: ChordType[],
+    inversions: number[],
+): ChordOptions {
+    const isSequence = displayMode === 'sequence'
+    const allowedTypes: ChordType[] =
+        focus === 'tonic'
+            ? ['triads']
+            : focus === 'all' && !isSequence
+                ? ['triads', 'sevenths', 'chromatic']
+                : ['triads', 'sevenths']
+    const singleChoice = isSequence && focus !== 'tonic'
+
+    let types = chordTypes.filter((t) => allowedTypes.includes(t))
+    if (types.length === 0) types = ['triads']
+    if (singleChoice) types = [types.includes('triads') ? 'triads' : 'sevenths']
+
+    // A cadence sequence keeps its tonic chords as triads, which have no 3rd inversion.
+    const hasSeventhInversion = types.includes('sevenths') && !(isSequence && focus === 'cadence')
+    const maxInversion = hasSeventhInversion ? 3 : 2
+    let invs = [...new Set(inversions)].filter((i) => i <= maxInversion).sort((a, b) => a - b)
+    if (invs.length === 0) invs = [0]
+    if (singleChoice) invs = [invs[0]]
+
+    return { allowedTypes, chordTypes: types, inversions: invs, maxInversion, singleChoice }
+}
 
 export interface Vocabulary {
     focus?: ChordFocus
@@ -43,6 +83,13 @@ export function buildVocabulary(
         }
     }
 
+    let triadInversions = inversions.filter((i) => i <= 2)
+    // A cadence needs its tonic even when only 7th chords are chosen (I–V7–I)
+    if (focus === 'cadence' && !chordTypes.includes('triads') && chordTypes.includes('sevenths')) {
+        triadDegrees = [0]
+        if (triadInversions.length === 0) triadInversions = [0]
+    }
+
     if (chordTypes.includes('sevenths')) {
         if (focus === 'tonic') {
             seventhDegrees = []
@@ -56,7 +103,7 @@ export function buildVocabulary(
     return {
         focus,
         triadDegrees,
-        triadInversions: inversions.filter((i) => i <= 2),
+        triadInversions,
         seventhDegrees,
         seventhInversions: inversions,
         chromatic: chordTypes.includes('chromatic') && focus === 'all' ? ['V7/V', 'N6'] : [],

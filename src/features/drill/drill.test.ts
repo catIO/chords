@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import curriculumData from '../../data/royal_conservatory_pwa_chords.json'
 import { curriculumSchema } from '../../types/curriculum'
-import { buildChordPool, buildScaleSequence, buildVocabulary, pickChord } from './drill'
-import { curriculumKeys, keyId, type KeyChoice } from './keys'
+import { buildChordPool, buildScaleSequence, buildVocabulary, pickChord, resolveChordOptions } from './drill'
+import { curriculumKeys, keyId, keysForTier, type KeyChoice } from './keys'
 
 const curriculum = curriculumSchema.parse(curriculumData)
 
@@ -14,6 +14,48 @@ describe('keys', () => {
         const ids = curriculumKeys(curriculum).map((k) => k.id)
         expect(new Set(ids).size).toBe(ids.length)
         expect(ids[0]).toBe('C-major')
+    })
+
+    it('builds cumulative key tiers of 10, 20 and all 24 keys', () => {
+        const ids = (tier: 'beginner' | 'intermediate' | 'advanced') => keysForTier(curriculum, tier).map((k) => k.id)
+        const beginner = ids('beginner')
+        const intermediate = ids('intermediate')
+
+        expect(beginner).toHaveLength(10)
+        expect(beginner).toContain('F#-minor')
+        expect(beginner).not.toContain('Bb-major')
+        expect(intermediate).toHaveLength(20)
+        expect(intermediate).toEqual(expect.arrayContaining(beginner))
+        expect(intermediate).not.toContain('B-major')
+        expect(ids('advanced')).toEqual(curriculumKeys(curriculum).map((k) => k.id))
+    })
+})
+
+describe('resolveChordOptions', () => {
+    it('keeps multi-selections for flashcards', () => {
+        const o = resolveChordOptions('flashcard', 'all', ['triads', 'sevenths', 'chromatic'], [2, 0, 3])
+        expect(o.chordTypes).toEqual(['triads', 'sevenths', 'chromatic'])
+        expect(o.inversions).toEqual([0, 2, 3])
+        expect(o.singleChoice).toBe(false)
+    })
+
+    it('uses one chord type and the lowest inversion in a scale sequence', () => {
+        const o = resolveChordOptions('sequence', 'all', ['sevenths', 'triads', 'chromatic'], [2, 1])
+        expect(o.chordTypes).toEqual(['triads'])
+        expect(o.inversions).toEqual([1])
+        expect(o.allowedTypes).not.toContain('chromatic')
+    })
+
+    it('never gives triads a 3rd inversion', () => {
+        expect(resolveChordOptions('sequence', 'all', ['triads'], [3]).inversions).toEqual([0])
+        expect(resolveChordOptions('sequence', 'cadence', ['sevenths'], [3]).inversions).toEqual([0])
+        expect(resolveChordOptions('sequence', 'all', ['sevenths'], [3]).inversions).toEqual([3])
+    })
+
+    it('uses triads only for Tonic only', () => {
+        const o = resolveChordOptions('flashcard', 'tonic', ['sevenths'], [0, 1])
+        expect(o.chordTypes).toEqual(['triads'])
+        expect(o.inversions).toEqual([0, 1])
     })
 })
 
@@ -86,6 +128,16 @@ describe('chord pool', () => {
         expect(numerals).not.toContain('IV')
         expect(numerals).not.toContain('ii')
         expect(numerals).not.toContain('vi')
+    })
+
+    it('keeps the tonic in a cadence when only 7th chords are chosen', () => {
+        const pool = buildChordPool({
+            keys: [key('C', 'major')],
+            minorForms: ['harmonic'],
+            vocabulary: buildVocabulary(['sevenths'], [3], 'cadence'),
+            weighting: 'common',
+        })
+        expect(pool.map((e) => e.chord.romanNumeral).sort()).toEqual(['I', 'V4/2'])
     })
 })
 

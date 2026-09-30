@@ -13,6 +13,8 @@ export type ChordQuality =
     | 'dominant7'
     | 'major7'
     | 'minor7'
+    | 'minorMajor7'
+    | 'augmentedMajor7'
     | 'halfDiminished7'
     | 'diminished7'
 
@@ -40,7 +42,7 @@ const SCALE_STEPS: Record<ScaleType, number[]> = {
 const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 const TRIAD_FIGURES = ['', '6', '6/4']
 const SEVENTH_FIGURES = ['7', '6/5', '4/3', '4/2']
-const UPPERCASE_QUALITIES = new Set<ChordQuality>(['major', 'augmented', 'dominant7', 'major7'])
+const UPPERCASE_QUALITIES = new Set<ChordQuality>(['major', 'augmented', 'dominant7', 'major7', 'augmentedMajor7'])
 
 const SYMBOL_SUFFIX: Record<ChordQuality, string> = {
     major: '',
@@ -50,6 +52,8 @@ const SYMBOL_SUFFIX: Record<ChordQuality, string> = {
     dominant7: '7',
     major7: 'maj7',
     minor7: 'm7',
+    minorMajor7: 'm(maj7)',
+    augmentedMajor7: '+maj7',
     halfDiminished7: 'm7b5',
     diminished7: '°7',
 }
@@ -62,6 +66,8 @@ const ROMAN_MARK: Record<ChordQuality, string> = {
     dominant7: '',
     major7: 'M',
     minor7: '',
+    minorMajor7: 'M',
+    augmentedMajor7: '+M',
     halfDiminished7: 'ø',
     diminished7: '°',
 }
@@ -112,6 +118,8 @@ function seventhQuality(tones: string[]): ChordQuality {
     if (triad === 'major' && seventh === 10) return 'dominant7'
     if (triad === 'major' && seventh === 11) return 'major7'
     if (triad === 'minor' && seventh === 10) return 'minor7'
+    if (triad === 'minor' && seventh === 11) return 'minorMajor7'
+    if (triad === 'augmented' && seventh === 11) return 'augmentedMajor7'
     if (triad === 'diminished' && seventh === 10) return 'halfDiminished7'
     if (triad === 'diminished' && seventh === 9) return 'diminished7'
     throw new Error(`Unsupported seventh chord: ${tones.join(' ')}`)
@@ -204,4 +212,17 @@ export function diatonicCloseNotes(
     }
 
     return inverted.map((t) => `${t.tone}${t.octave}`)
+}
+
+/** Close-position treble staff notes for any chord, bass first (e.g. C/E → E4 G4 C5). */
+export function closePositionNotes(chord: Chord): string[] {
+    const ordered = [...chord.tones.slice(chord.inversion), ...chord.tones.slice(0, chord.inversion)]
+    let previous = -Infinity
+    return ordered.map((tone, i) => {
+        const { letter, semitone } = parsePitchSpelling(tone)
+        let octave = i === 0 && !['A', 'B'].includes(letter) ? 4 : 3
+        while ((octave + 1) * 12 + semitone <= previous) octave++
+        previous = (octave + 1) * 12 + semitone
+        return `${tone}${octave}`
+    })
 }

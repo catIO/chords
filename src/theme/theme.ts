@@ -21,8 +21,8 @@ export const buildTheme = (mode: PaletteMode) =>
         palette: {
             mode,
             primary: {
-                main: mode === 'light' ? '#005a9c' : '#a0d4ff',
-                contrastText: mode === 'light' ? '#ffffff' : '#003258',
+                main: mode === 'light' ? '#8a5a1c' : '#f0c896',
+                contrastText: mode === 'light' ? '#ffffff' : '#2d1600',
             },
             secondary: {
                 main: mode === 'light' ? '#7b4a26' : '#f0c896',
@@ -87,7 +87,7 @@ export const buildTheme = (mode: PaletteMode) =>
                             borderColor: mode === 'light' ? '#ccb89f' : 'rgba(255,255,255,0.15)',
                         },
                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: mode === 'light' ? '#9e7d62' : 'rgba(160,212,255,0.5)',
+                            borderColor: mode === 'light' ? '#9e7d62' : 'rgba(240,200,150,0.5)',
                         },
                     },
                 },
@@ -118,7 +118,7 @@ export const buildTheme = (mode: PaletteMode) =>
                         '&.Mui-selected': {
                             fontWeight: 700,
                             color: mode === 'light' ? '#2f241a' : '#e4e8f0',
-                            backgroundColor: mode === 'light' ? 'rgba(0,90,156,0.08)' : 'rgba(160,212,255,0.12)',
+                            backgroundColor: mode === 'light' ? 'rgba(138,90,28,0.1)' : 'rgba(240,200,150,0.12)',
                         },
                     },
                 },
@@ -149,7 +149,7 @@ export const buildTheme = (mode: PaletteMode) =>
                         '&:hover': {
                             background: mode === 'light'
                                 ? 'rgba(175,120,64,0.06)'
-                                : 'rgba(160,212,255,0.04)',
+                                : 'rgba(240,200,150,0.04)',
                         },
                         '& .MuiAccordionSummary-expandIconWrapper': {
                             color: mode === 'light' ? '#6f5a49' : '#b0bac9',
