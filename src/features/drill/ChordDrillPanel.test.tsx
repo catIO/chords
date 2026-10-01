@@ -41,6 +41,19 @@ describe('ChordDrillPanel', () => {
         expect(screen.getByText(/^Custom keys/)).toBeInTheDocument()
     })
 
+    it('names the cadence and matches the progression to the key tier', async () => {
+        render(<ChordDrillPanel curriculum={curriculum} />)
+        expect(screen.getByText('Perfect cadence (V–I)')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByText('Practice settings'))
+        await userEvent.click(screen.getByRole('button', { name: /^Intermediate/ }))
+        expect(screen.getByRole('button', { name: 'I–IV–V–I' })).toHaveAttribute('aria-pressed', 'true')
+
+        await userEvent.click(screen.getByRole('button', { name: /^Advanced/ }))
+        expect(screen.getByRole('button', { name: 'I–IV–V6/4–5/3–I' })).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByText('Perfect cadence with cadential 6/4 (V–I)')).toBeInTheDocument()
+    })
+
     it('asks for a key when none are selected', async () => {
         render(<ChordDrillPanel curriculum={curriculum} />)
 
@@ -74,7 +87,7 @@ describe('ChordDrillPanel', () => {
         expect(screen.getByRole('button', { name: 'Harmonic' })).toBeInTheDocument()
 
         // When Cadence is selected, Minor harmony should be hidden
-        await userEvent.click(screen.getByRole('button', { name: 'Cadence (tonic–dominant–tonic)' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cadence' }))
         expect(screen.queryByText('Minor harmony')).not.toBeInTheDocument()
 
         // When Tonic only is selected, Minor harmony should be hidden
@@ -101,7 +114,7 @@ describe('ChordDrillPanel', () => {
         expect(naturalBtn).toHaveAttribute('aria-pressed', 'true')
 
         // Switch to Cadence (Minor harmony is hidden)
-        await userEvent.click(screen.getByRole('button', { name: 'Cadence (tonic–dominant–tonic)' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cadence' }))
         expect(screen.queryByText('Minor harmony')).not.toBeInTheDocument()
 
         // Switch back to All degrees (Minor harmony is shown again)
@@ -138,18 +151,13 @@ describe('ChordDrillPanel', () => {
         expect(screen.getByRole('button', { name: 'Natural' })).toHaveAttribute('aria-pressed', 'true')
     })
 
-    it('shows close-position notes on a flashcard and keeps Voicing for 7th chords', async () => {
+    it('shows a four-note guitar voicing on a flashcard', async () => {
         render(<ChordDrillPanel curriculum={curriculum} />)
 
         await userEvent.click(screen.getByText('Practice settings'))
         await userEvent.click(screen.getByRole('button', { name: 'Single chord flashcard' }))
-        expect(screen.getByRole('button', { name: 'Close position' })).toHaveAttribute('aria-pressed', 'true')
-        // Close position on a flashcard is a plain triad: three notes
-        expect(screen.getByTestId('staff').textContent?.split(' ')).toHaveLength(3)
-
-        await userEvent.click(screen.getByRole('button', { name: '7th chords' }))
-        await userEvent.click(screen.getByRole('button', { name: 'Triads' }))
-        expect(screen.getByRole('group', { name: 'Voicing' })).toBeInTheDocument()
+        expect(screen.queryByRole('group', { name: 'Voicing' })).not.toBeInTheDocument()
+        expect(screen.getByTestId('staff').textContent?.split(' ')).toHaveLength(4)
     })
 
     it('uses one chord type and inversion at a time in a scale sequence', async () => {
@@ -176,15 +184,5 @@ describe('ChordDrillPanel', () => {
 
         await userEvent.click(screen.getByRole('button', { name: 'Tonic only' }))
         expect(screen.queryByRole('group', { name: 'Chords' })).not.toBeInTheDocument()
-    })
-
-    it('migrates the old 4-note setting to Guitar voicing', async () => {
-        localStorage.setItem(
-            'scale-chord-practice/drill/v2',
-            JSON.stringify({ keyIds: ['C-major'], triadVoicing: '4-note', minorForms: ['harmonic'], chordTypes: ['triads'], inversions: [0] }),
-        )
-        render(<ChordDrillPanel curriculum={curriculum} />)
-        await userEvent.click(screen.getByText('Practice settings'))
-        expect(screen.getByRole('button', { name: 'Guitar' })).toHaveAttribute('aria-pressed', 'true')
     })
 })

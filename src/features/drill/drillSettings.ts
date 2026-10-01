@@ -6,9 +6,7 @@ const drillSettingsSchema = z.object({
     keyIds: z.array(z.string()),
     chordFocus: z.enum(['cadence', 'tonic', 'all']).optional(),
     displayMode: z.enum(['sequence', 'flashcard']).optional(),
-    voicing: z.enum(['close', 'guitar']).optional(),
-    // Legacy: 4-note meant guitar voicings
-    triadVoicing: z.enum(['3-note', '4-note']).optional(),
+    cadence: z.enum(['basic', 'subdominant', 'cadential64']).optional(),
     activeKeyId: z.string().optional(),
     minorForms: z.array(z.enum(['natural', 'harmonic', 'melodic'])).min(1),
     chordTypes: z.array(z.enum(['triads', 'sevenths', 'chromatic'])).min(1),
@@ -22,7 +20,7 @@ export function loadDrillSettings(validKeyIds: string[]): DrillSettings {
         keyIds: validKeyIds,
         chordFocus: 'cadence',
         displayMode: 'sequence',
-        voicing: 'close',
+        cadence: 'basic',
         activeKeyId: validKeyIds[0],
         minorForms: ['harmonic'],
         chordTypes: ['triads'],
@@ -31,12 +29,12 @@ export function loadDrillSettings(validKeyIds: string[]): DrillSettings {
     try {
         const parsed = drillSettingsSchema.safeParse(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'))
         if (!parsed.success) return defaults
-        const { triadVoicing, ...saved } = parsed.data
+        const saved = parsed.data
         return {
             ...saved,
             chordFocus: saved.chordFocus ?? 'cadence',
             displayMode: saved.displayMode ?? 'sequence',
-            voicing: saved.voicing ?? (triadVoicing === '4-note' ? 'guitar' : 'close'),
+            cadence: saved.cadence ?? 'basic',
             activeKeyId: saved.activeKeyId && validKeyIds.includes(saved.activeKeyId) ? saved.activeKeyId : validKeyIds[0],
             keyIds: saved.keyIds.filter((id) => validKeyIds.includes(id)),
         }

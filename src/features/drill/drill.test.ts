@@ -130,6 +130,10 @@ describe('chord pool', () => {
         expect(numerals).not.toContain('vi')
     })
 
+    it('adds IV to the cadence vocabulary for longer progressions', () => {
+        expect(buildVocabulary(['triads'], [0], 'cadence', 'subdominant').triadDegrees).toEqual([0, 3, 4])
+    })
+
     it('keeps the tonic in a cadence when only 7th chords are chosen', () => {
         const pool = buildChordPool({
             keys: [key('C', 'major')],
@@ -204,6 +208,22 @@ describe('buildScaleSequence', () => {
         expect(seq).toHaveLength(3)
         expect(seq.map((s) => s.romanNumeral)).toEqual(['i', 'V', 'i'])
         expect(seq.map((s) => s.symbol)).toEqual(['Am', 'E', 'Am'])
+    })
+
+    it('generates I–IV–V–I and the cadential 6/4 progression', () => {
+        const subdominant = buildScaleSequence(key('A', 'minor'), 'cadence', ['harmonic'], [0], ['triads'], 'subdominant')
+        expect(subdominant.map((s) => s.romanNumeral)).toEqual(['i', 'iv', 'V', 'i'])
+        expect(subdominant.map((s) => s.symbol)).toEqual(['Am', 'Dm', 'E', 'Am'])
+
+        const cadential = buildScaleSequence(key('C', 'major'), 'cadence', ['harmonic'], [0], ['triads'], 'cadential64')
+        expect(cadential.map((s) => s.romanNumeral)).toEqual(['I', 'IV', 'V6/4', 'V5/3', 'I'])
+        expect(cadential.map((s) => s.symbol)).toEqual(['C', 'F', 'C/G', 'G', 'C'])
+        expect(cadential[2].notes).toEqual(['G4', 'C5', 'E5'])
+    })
+
+    it('keeps the cadential 6/4 over a root-position V7 when only 7ths are chosen', () => {
+        const seq = buildScaleSequence(key('C', 'major'), 'cadence', ['harmonic'], [1], ['sevenths'], 'cadential64')
+        expect(seq.map((s) => s.romanNumeral)).toEqual(['I6', 'IV6', 'V6/4', 'V7', 'I6'])
     })
 
     it('handles mixed major/minor key selections properly in chord pool', () => {

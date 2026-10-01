@@ -6,6 +6,9 @@ export interface GuitarVoicing {
     notes: string[]
     /** Left-hand finger per note: '0' = open string */
     fingerings: string[]
+    /** String per note, 0 = 6th (low E) string */
+    strings: number[]
+    frets: number[]
 }
 
 interface Placement {
@@ -48,49 +51,85 @@ function assignFingerings(placements: Placement[]): number[] | null {
     const fretted = placements.map((p, i) => ({ ...p, i })).filter((p) => p.fret > 0)
     if (fretted.length === 0) return fingers
 
-    // First position: one finger per fret
-    const frettedFrets = fretted.map((p) => p.fret)
-    if (Math.max(...frettedFrets) <= 4 && new Set(frettedFrets).size === frettedFrets.length) {
-        return placements.map((p) => p.fret)
+    const idiom = alternatingGrip(fretted)
+    if (idiom) {
+        fretted.forEach((p, k) => (fingers[p.i] = idiom[k]))
+        return fingers
     }
 
-    const minFret = Math.min(...fretted.map((p) => p.fret))
-    const lowestString = Math.min(...fretted.map((p) => p.stringIdx))
-    const highestString = Math.max(...fretted.map((p) => p.stringIdx))
-    const atMin = fretted.filter((p) => p.fret === minFret)
-    const isBarre =
-        atMin.length >= 3 ||
-        (atMin.length === 2 &&
-            highestString - lowestString >= 3 &&
-            atMin.some((p) => p.stringIdx === lowestString) &&
-            atMin.some((p) => p.stringIdx === highestString))
-
-    let nextFinger = 1
-    let remaining = fretted
-    if (isBarre) {
-        atMin.forEach((p) => (fingers[p.i] = 1))
-        nextFinger = 2
-        remaining = fretted.filter((p) => p.fret !== minFret)
+    let best: { choice: number[]; cost: number } | null = null
+    const choice: number[] = []
+    const search = (k: number) => {
+        if (k === fretted.length) {
+            const cost = fingeringCost(fretted, choice, placements)
+            if (cost !== null && (!best || cost < best.cost)) best = { choice: [...choice], cost }
+            return
+        }
+        for (let finger = 1; finger <= 4; finger++) {
+            choice[k] = finger
+            search(k + 1)
+        }
     }
+    search(0)
 
-    const frets = [...new Set(remaining.map((p) => p.fret))].sort((a, b) => a - b)
-    for (const fret of frets) {
-        const group = remaining.filter((p) => p.fret === fret).sort((a, b) => a.stringIdx - b.stringIdx)
-        const naturalFinger = fret - minFret + 1
-        if (group.length >= 3) {
-            const finger = Math.max(nextFinger, naturalFinger)
-            group.forEach((p) => (fingers[p.i] = finger))
-            nextFinger = finger + 1
-        } else {
-            for (const p of group) {
-                const finger = Math.max(nextFinger, naturalFinger)
-                fingers[p.i] = finger
-                nextFinger = finger + 1
+    const found = best as { choice: number[] } | null
+    if (!found) return null
+    fretted.forEach((p, k) => (fingers[p.i] = found.choice[k]))
+    return fingers
+}
+
+/**
+ * Four fingers on adjacent strings alternating low–high–low–high fret (e.g. a diminished seventh):
+ * the classical fingering 2–3–1–4, which keeps the hand angled for the next shift.
+ */
+function alternatingGrip(fretted: Placement[]): number[] | null {
+    if (fretted.length !== 4) return null
+    const [a, b, c, d] = fretted
+    const adjacent = fretted.every((p, i) => i === 0 || p.stringIdx === fretted[i - 1].stringIdx + 1)
+    const alternating = a.fret === c.fret && b.fret === d.fret && b.fret === a.fret + 1
+    return adjacent && alternating ? [2, 3, 1, 4] : null
+}
+
+/** Lower is easier; null when the fingers cannot form the shape. Placements are ordered low string to high. */
+function fingeringCost(fretted: Placement[], fingers: number[], placements: Placement[]): number | null {
+    const frets = fretted.map((p) => p.fret)
+    const minFret = Math.min(...frets)
+    // Open chords sit in first position: the index finger covers fret 1 even when nothing is played there
+    const isOpenChord = Math.max(...frets) <= 4 && (minFret === 1 || placements.some((p) => p.fret === 0))
+    const position = isOpenChord ? 1 : minFret
+    let cost = 0
+
+    for (let i = 0; i < fretted.length; i++) {
+        for (let j = i + 1; j < fretted.length; j++) {
+            if (fingers[i] === fingers[j]) {
+                if (frets[i] !== frets[j]) return null
+                continue
             }
+            const [lo, hi] = fingers[i] < fingers[j] ? [i, j] : [j, i]
+            const gap = frets[hi] - frets[lo]
+            const fingerGap = fingers[hi] - fingers[lo]
+            // A higher finger never sits behind a lower one, and stretches one fret at most
+            if (gap < 0 || gap > fingerGap + 1) return null
+            cost += Math.max(0, gap - fingerGap) * 2 + Math.max(0, fingerGap - gap - 1) * 0.5
+            // On one fret the lower finger normally takes the lower string
+            if (gap === 0 && fretted[hi].stringIdx < fretted[lo].stringIdx) cost += 0.5
         }
     }
 
-    return fingers.every((f) => f <= 4) ? fingers : null
+    for (const finger of new Set(fingers)) {
+        const barred = fretted.filter((_, k) => fingers[k] === finger)
+        if (barred.length < 2) continue
+        if (finger !== 1) return null
+        const low = barred[0].stringIdx
+        const high = barred[barred.length - 1].stringIdx
+        // Every string sounded under the barre must be stopped at or above it
+        if (placements.some((p) => p.stringIdx > low && p.stringIdx < high && p.fret < barred[0].fret)) return null
+        // Flattening the index over two neighbouring strings is easy; a longer barre takes effort
+        cost += barred.length === 2 && high - low === 1 ? 0.4 : 1.5
+    }
+
+    fretted.forEach((p, k) => (cost += Math.abs(p.fret - fingers[k] + 1 - position) * 0.5 + fingers[k] * 0.01))
+    return cost
 }
 
 function scoreVoicing(placements: Placement[], chord: Chord, bassMidi?: number): number {
@@ -149,6 +188,8 @@ export function generateVoicing(chord: Chord, bassMidi?: number): GuitarVoicing 
     return {
         notes: best.placements.map(spell),
         fingerings: best.fingers.map(String),
+        strings: best.placements.map((p) => p.stringIdx),
+        frets: best.placements.map((p) => p.fret),
     }
 }
 
@@ -172,4 +213,61 @@ export function voiceWithRisingBass(chords: Chord[]): (GuitarVoicing | null)[] {
         previousBass = bassMidi
         return voiceChord(chord, { bassMidi })
     })
+}
+
+const writtenMidi = (note: string) => {
+    const { semitone, specifiedOctave } = parsePitchSpelling(note)
+    return specifiedOctave === undefined ? null : (specifiedOctave + 1) * 12 + semitone
+}
+
+/** Finds the strings and frets of a written voicing (e.g. from the RCM book) from its notes and left-hand fingers. */
+export function locateVoicing(notes: string[], fingerings: string[]): GuitarVoicing | null {
+    const midis = notes.map(writtenMidi)
+    const fingers = fingerings.map(Number)
+    if (midis.some((m) => m === null) || fingers.length !== notes.length || fingers.some((f) => !(f >= 0 && f <= 4))) {
+        return null
+    }
+
+    let best: { strings: number[]; frets: number[]; cost: number } | null = null
+    const search = (i: number, strings: number[], frets: number[]) => {
+        if (i === notes.length) {
+            const cost = placementCost(strings, frets, fingers)
+            if (cost !== null && (!best || cost < best.cost)) best = { strings, frets, cost }
+            return
+        }
+        for (let s = 0; s < OPEN_STRINGS.length; s++) {
+            if (strings.includes(s)) continue
+            const fret = midis[i]! - OPEN_STRINGS[s]
+            if (fret < 0 || fret > MAX_FRET + 3 || (fret === 0) !== (fingers[i] === 0)) continue
+            search(i + 1, [...strings, s], [...frets, fret])
+        }
+    }
+    search(0, [], [])
+
+    const found = best as { strings: number[]; frets: number[] } | null
+    return found ? { notes, fingerings, strings: found.strings, frets: found.frets } : null
+}
+
+/** Lower is more natural; null when the fingers cannot reach the frets. */
+function placementCost(strings: number[], frets: number[], fingers: number[]): number | null {
+    const fretted = fingers.map((finger, i) => ({ finger, fret: frets[i] })).filter((p) => p.finger > 0)
+    let cost = 0
+    for (const a of fretted) {
+        for (const b of fretted) {
+            if (a.finger === b.finger && a.fret !== b.fret) return null
+            if (a.finger < b.finger) {
+                const gap = b.fret - a.fret
+                // A higher finger never sits behind a lower one, and may stretch one fret at most
+                if (gap < 0 || gap > b.finger - a.finger + 1) return null
+                cost += Math.abs(gap - (b.finger - a.finger)) * 0.5
+            }
+        }
+    }
+    const fretValues = fretted.map((p) => p.fret)
+    if (fretValues.length) cost += (Math.max(...fretValues) - Math.min(...fretValues)) * 3 + Math.min(...fretValues) * 0.1
+    // Notes are written low to high, so their strings normally rise too
+    strings.forEach((s, i) => {
+        if (i > 0 && s < strings[i - 1]) cost += 10
+    })
+    return cost
 }

@@ -168,6 +168,87 @@ export function chromaticChord(tonic: string, kind: ChromaticChord): Chord {
     return { ...buildChord(tones, 1, 'II'), romanNumeral: 'N6' }
 }
 
+const stripOctave = (note: string) => note.replace(/\d+$/, '')
+
+/** Names the chord spelled by written notes (bass first), e.g. ['F#3', 'C4', 'D4', 'A4'] → D7/F#. Key-free, so romanNumeral is empty. */
+export function identifyChord(notes: string[]): Chord | null {
+    const tones = [...new Set(notes.map(stripOctave))]
+    const bass = stripOctave(notes[0])
+    const letterIdx = (tone: string) => LETTERS.indexOf(parsePitchSpelling(tone).letter)
+
+    for (const root of tones) {
+        // Spelled in thirds above the root: letters 0, 2, 4 and 6 steps up
+        const byStep = new Map<number, string>()
+        const stacked = tones.every((tone) => {
+            const step = (letterIdx(tone) - letterIdx(root) + 7) % 7
+            if (step % 2 !== 0 || byStep.has(step)) return false
+            byStep.set(step, tone)
+            return true
+        })
+        const third = byStep.get(2)
+        if (!stacked || !third) continue
+
+        const seventh = byStep.get(6)
+        // Guitar voicings often leave out the fifth; assume a perfect one
+        const fifth = byStep.get(4) ?? transpose(root, 4, 7)
+        const full = seventh ? [root, third, fifth, seventh] : [root, third, fifth]
+        try {
+            return { ...buildChord(full, full.indexOf(bass), 'I'), romanNumeral: '' }
+        } catch {
+            return null
+        }
+    }
+    return null
+}
+
+const QUALITY_NAME: Record<ChordQuality, string> = {
+    major: ' major',
+    minor: ' minor',
+    diminished: ' diminished',
+    augmented: ' augmented',
+    dominant7: '7',
+    major7: ' major 7',
+    minor7: ' minor 7',
+    minorMajor7: ' minor-major 7',
+    augmentedMajor7: ' augmented major 7',
+    halfDiminished7: ' half-diminished 7',
+    diminished7: ' diminished 7',
+}
+
+const QUALITY_DESCRIPTION: Record<ChordQuality, string> = {
+    major: 'Major triad',
+    minor: 'Minor triad',
+    diminished: 'Diminished triad',
+    augmented: 'Augmented triad',
+    dominant7: 'Dominant seventh',
+    major7: 'Major seventh',
+    minor7: 'Minor seventh',
+    minorMajor7: 'Minor-major seventh',
+    augmentedMajor7: 'Augmented major seventh',
+    halfDiminished7: 'Half-diminished seventh',
+    diminished7: 'Fully diminished seventh',
+}
+
+const INVERSION_NAME = ['', 'first inversion', 'second inversion', 'third inversion']
+
+/** Displays sharps and flats as ♯ and ♭, e.g. "F#" → "F♯". */
+export function prettyPitch(text: string): string {
+    return text.replace(/([A-G])(#{1,2}|b{1,2})/g, (_, letter: string, acc: string) =>
+        letter + acc.replace(/#/g, '♯').replace(/b/g, '♭'),
+    )
+}
+
+/** Full chord name with a slash bass for inversions, e.g. "C major", "F♯ minor 7", "D7/F♯". */
+export function chordName(chord: Chord): string {
+    return prettyPitch(chord.root + QUALITY_NAME[chord.quality] + (chord.inversion ? `/${chord.bass}` : ''))
+}
+
+/** e.g. "Major triad" or "Dominant seventh, first inversion". */
+export function chordDescription(chord: Chord): string {
+    const inversion = INVERSION_NAME[chord.inversion]
+    return QUALITY_DESCRIPTION[chord.quality] + (inversion ? `, ${inversion}` : '')
+}
+
 /** Builds close-position textbook treble staff notes for a diatonic chord (e.g. C4-E4-G4). */
 export function diatonicCloseNotes(
     tonic: string,

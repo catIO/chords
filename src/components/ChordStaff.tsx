@@ -25,6 +25,8 @@ export interface ChordStaffProps {
     showFingerings?: boolean
     clef?: 'treble' | '8vb'
     endBarline?: boolean
+    /** Narrowest score canvas in px; lower it for a single chord */
+    minWidth?: number
 }
 
 const toVexDuration = (event: ChordEvent): string => {
@@ -46,6 +48,7 @@ export function ChordStaff({
     showFingerings = true,
     clef = '8vb',
     endBarline = false,
+    minWidth = 560,
 }: ChordStaffProps) {
     const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -58,7 +61,7 @@ export function ChordStaff({
         // Size the stave to fill the score canvas width
         const canvasWidth = showAnnotations
             ? Math.max(780, events.length * 105)
-            : Math.max(560, events.length * 110)
+            : Math.max(minWidth, events.length * 110)
         const staveWidth = canvasWidth - 32
         const canvasHeight = showAnnotations ? 180 : 210
 
@@ -227,7 +230,7 @@ export function ChordStaff({
             svg.style.display = 'block'
             svg.style.maxWidth = '100%'
         }
-    }, [events, currentIndex, keySignature, showAnnotations, showFingerings, clef, endBarline])
+    }, [events, currentIndex, keySignature, showAnnotations, showFingerings, clef, endBarline, minWidth])
 
     return (
         <Box

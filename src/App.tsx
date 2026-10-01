@@ -28,10 +28,11 @@ import { buildTheme } from './theme/theme'
 import { CadencePanel } from './features/cadences/CadencePanel'
 import { mergeMinorForms, type CadenceScale } from './features/cadences/mergeMinorForms'
 import { ChordDrillPanel } from './features/drill/ChordDrillPanel'
+import { ShapesPanel } from './features/shapes/ShapesPanel'
 import { UpdateBanner } from './components/UpdateBanner'
 
 type CadenceFilter = 'all' | 'major' | 'minor'
-type PracticeTab = 'cadences' | 'drill'
+type PracticeTab = 'cadences' | 'drill' | 'shapes'
 
 const STORAGE_KEY = 'scale-chord-practice/v2'
 
@@ -43,7 +44,7 @@ function loadSaved(): { grade: string; expandedScaleId: string | null; tab: Prac
       return {
         grade: typeof parsed.grade === 'string' && gradeOptions.includes(parsed.grade) ? parsed.grade : gradeOptions[0],
         expandedScaleId: typeof parsed.expandedScaleId === 'string' ? parsed.expandedScaleId : null,
-        tab: parsed.tab === 'drill' ? 'drill' : 'cadences',
+        tab: parsed.tab === 'drill' || parsed.tab === 'shapes' ? parsed.tab : 'cadences',
       }
     }
   } catch { /* ignore */ }
@@ -155,6 +156,7 @@ function PracticeApp() {
               <Tabs value={tab} onChange={(_, value: PracticeTab) => setTab(value)} variant="fullWidth" aria-label="Practice mode">
                 <Tab value="cadences" label="Cadences" />
                 <Tab value="drill" label="Random chords" />
+                <Tab value="shapes" label="Shapes" />
               </Tabs>
 
               {tab === 'cadences' ? (
@@ -194,8 +196,10 @@ function PracticeApp() {
                     onExpandChange={setExpandedScaleId}
                   />
                 </>
-              ) : (
+              ) : tab === 'drill' ? (
                 <ChordDrillPanel curriculum={appCurriculum} />
+              ) : (
+                <ShapesPanel curriculum={appCurriculum} />
               )}
             </Stack>
           </Paper>
