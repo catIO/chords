@@ -52,14 +52,14 @@ describe('classifyShape', () => {
 
 describe('locateVoicing', () => {
     it('finds the strings and frets of a printed chord', () => {
-        // RCM Level 5 G major: barre on the 3rd fret
+        // The curated G major cadence chord: barre on the 3rd fret
         expect(locateVoicing(['G3', 'B4', 'D5', 'G5'], ['1', '2', '1', '1'])).toMatchObject({
             strings: [0, 3, 4, 5],
             frets: [3, 4, 3, 3],
         })
     })
 
-    it('places every RCM chord on the fretboard', () => {
+    it('places every curated chord on the fretboard', () => {
         const missing = Object.values(curriculum.grades)
             .flat()
             .flatMap((s) => s.sequence)
@@ -73,14 +73,14 @@ describe('shape examples', () => {
     const examples = buildShapeExamples(curriculum)
 
     it('names each chord and keeps the voicing for notation', () => {
-        const dMajor = examples.find((e) => e.source === 'Level 1' && e.name === 'D major' && e.family === 'triangle')
+        const dMajor = examples.find((e) => e.curated && e.name === 'D major' && e.family === 'triangle')
         expect(dMajor).toMatchObject({ description: 'Major triad', fingerPattern: '1–3–2' })
         expect(dMajor?.event.notes).toHaveLength(dMajor!.event.fingerings!.length)
         expect(new Set(examples.map((e) => e.id)).size).toBe(examples.length)
     })
 
     it('keeps to chords common in classical guitar repertoire', () => {
-        const generated = examples.filter((e) => !e.source)
+        const generated = examples.filter((e) => !e.curated)
         expect(generated.some((e) => e.chord.quality === 'augmented')).toBe(false)
         expect(generated.some((e) => /^(A♭|D♭|G♭|C♭)/.test(e.name))).toBe(false)
         expect(examples.find((e) => e.name === 'D♯ diminished 7/F♯')).toMatchObject({
@@ -91,6 +91,23 @@ describe('shape examples', () => {
             family: 'parallelogram',
             fingerPattern: '2–3–1–4',
         })
+    })
+
+    it('moves the diminished-seventh grip up the neck and resolves each chord by step', () => {
+        const grip = examples.filter((e) => e.fingerPattern === '2–3–1–4' && e.layout.startsWith('Relative frets 1-2-1-2'))
+        expect(grip.map((e) => e.fretRange[0]).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+        expect(grip.every((e) => e.family === 'parallelogram' && e.chord.quality === 'diminished7')).toBe(true)
+
+        // Carcassi Op. 60 No. 1: D♯°7/F♯ in 4th position
+        const carcassi = grip.find((e) => e.fretRange[0] === 4)!
+        expect(carcassi.event.notes).toEqual(['F#4', 'C5', 'D#5', 'A5'])
+        expect(carcassi.resolution?.name).toBe('E minor')
+        expect(carcassi.resolution?.events[1].notes).toEqual(['G4', 'B4', 'E5', 'G5'])
+    })
+
+    it('adds a resolution only to tension chords', () => {
+        expect(examples.some((e) => e.resolution)).toBe(true)
+        expect(examples.filter((e) => e.resolution).every((e) => e.chordType === 'sevenths' || e.chord.quality === 'diminished' || e.chord.inversion === 2)).toBe(true)
     })
 
     it('groups harmonically different chords under one hand shape', () => {

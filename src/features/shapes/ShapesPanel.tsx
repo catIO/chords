@@ -75,7 +75,6 @@ function ChordHeading({ example }: { example: ShapeExample }) {
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     {example.name}
                 </Typography>
-                {example.source ? <Chip label={`RCM ${example.source}`} size="small" variant="outlined" /> : null}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
                 {example.description}
@@ -84,20 +83,42 @@ function ChordHeading({ example }: { example: ShapeExample }) {
     )
 }
 
-function ExampleCard({ example }: { example: ShapeExample }) {
+function ExampleCard({ example, pitchRange }: { example: ShapeExample; pitchRange: string[] }) {
+    const [showResolution, setShowResolution] = useState(false)
+    const resolution = example.resolution
     return (
-        <Card variant="outlined">
-            <CardContent>
-                <Stack spacing={1}>
-                    <ChordHeading example={example} />
-                    <Box sx={{ width: '100%', maxWidth: 280, alignSelf: 'center' }}>
-                        <ChordStaff events={[example.event]} minWidth={220} />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                        {positionLabel(example)}
-                    </Typography>
-                </Stack>
-            </CardContent>
+        // Subgrid rows (heading, staff, footer) line up across every card in a grid row
+        <Card
+            variant="outlined"
+            sx={{ display: 'grid', gridRow: 'span 3', gridTemplateRows: 'subgrid', rowGap: 1, p: 2, alignItems: 'start' }}
+        >
+            <ChordHeading example={example} />
+            {/* Same canvas width and pitch range for every card in the group, so all staves match in size */}
+            <ChordStaff
+                events={showResolution && resolution ? resolution.events : [example.event]}
+                minWidth={240}
+                pitchRange={pitchRange}
+            />
+            <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                sx={{ alignSelf: 'end', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+            >
+                <Typography variant="caption" color="text.secondary">
+                    {positionLabel(example)}
+                </Typography>
+                {resolution ? (
+                    <Button
+                        size="small"
+                        onClick={() => setShowResolution((open) => !open)}
+                        aria-expanded={showResolution}
+                        sx={{ px: 0.5, minWidth: 0, textTransform: 'none' }}
+                    >
+                        → {resolution.name}
+                    </Button>
+                ) : null}
+            </Stack>
         </Card>
     )
 }
@@ -237,7 +258,7 @@ export function ShapesPanel({ curriculum }: { curriculum: Curriculum }) {
                             <AccordionDetails>
                                 <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
                                     {group.examples.map((example) => (
-                                        <ExampleCard key={example.id} example={example} />
+                                        <ExampleCard key={example.id} example={example} pitchRange={group.pitchRange} />
                                     ))}
                                 </Box>
                             </AccordionDetails>
@@ -263,6 +284,11 @@ export function ShapesPanel({ curriculum }: { curriculum: Curriculum }) {
                                         </Typography>
                                         <Stack spacing={0.25}>
                                             <ChordHeading example={example} />
+                                            {example.resolution ? (
+                                                <Typography variant="body2" color="primary">
+                                                    → {example.resolution.name}
+                                                </Typography>
+                                            ) : null}
                                             <Typography variant="caption" color="text.secondary">
                                                 {positionLabel(example)}
                                             </Typography>

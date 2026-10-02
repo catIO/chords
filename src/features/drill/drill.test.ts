@@ -182,11 +182,10 @@ describe('buildScaleSequence', () => {
         expect(seq.every((s) => s.symbol.startsWith('D'))).toBe(true)
     })
 
-    it('generates C major I–V–I cadence', () => {
+    it('generates C major V–I cadence', () => {
         const seq = buildScaleSequence(key('C', 'major'), 'cadence', ['harmonic'], [0], ['triads'])
-        expect(seq).toHaveLength(3)
-        expect(seq.map((s) => s.romanNumeral)).toEqual(['I', 'V', 'I'])
-        expect(seq.map((s) => s.symbol)).toEqual(['C', 'G', 'C'])
+        expect(seq.map((s) => s.romanNumeral)).toEqual(['V', 'I'])
+        expect(seq.map((s) => s.symbol)).toEqual(['G', 'C'])
     })
 
     it('generates A minor natural-minor degree generation', () => {
@@ -203,11 +202,18 @@ describe('buildScaleSequence', () => {
         expect(seq.map((s) => s.symbol)).toEqual(['Am', 'B°', 'C+', 'Dm', 'E', 'F', 'G#°'])
     })
 
-    it('generates A minor cadence producing Am–E–Am even if natural minor was selected', () => {
+    it('generates A minor cadence producing E–Am even if natural minor was selected', () => {
         const seq = buildScaleSequence(key('A', 'minor'), 'cadence', ['natural'], [0], ['triads'])
-        expect(seq).toHaveLength(3)
-        expect(seq.map((s) => s.romanNumeral)).toEqual(['i', 'V', 'i'])
-        expect(seq.map((s) => s.symbol)).toEqual(['Am', 'E', 'Am'])
+        expect(seq.map((s) => s.romanNumeral)).toEqual(['V', 'i'])
+        expect(seq.map((s) => s.symbol)).toEqual(['E', 'Am'])
+    })
+
+    it('generates the extended cadence with vi, the cadential 6/4 and V–V7', () => {
+        const major = buildScaleSequence(key('G', 'major'), 'cadence', ['harmonic'], [0], ['triads'], 'extended')
+        expect(major.map((s) => s.romanNumeral)).toEqual(['I', 'vi', 'IV', 'V6/4', 'V', 'V7', 'I'])
+        expect(major.map((s) => s.symbol)).toEqual(['G', 'Em', 'C', 'G/D', 'D', 'D7', 'G'])
+        const minor = buildScaleSequence(key('E', 'minor'), 'cadence', ['harmonic'], [0], ['triads'], 'extended')
+        expect(minor.map((s) => s.romanNumeral)).toEqual(['i', 'VI', 'iv', 'V6/4', 'V', 'V7', 'i'])
     })
 
     it('generates I–IV–V–I and the cadential 6/4 progression', () => {

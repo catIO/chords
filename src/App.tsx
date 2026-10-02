@@ -14,56 +14,35 @@ import {
   Stack,
   Tab,
   Tabs,
-  ToggleButton,
-  ToggleButtonGroup,
   Toolbar,
   Typography,
 } from '@mui/material'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import { ChordLogoIcon } from './components/ChordLogoIcon'
 import { ThemeProvider } from '@mui/material/styles'
-import { curriculum, curriculumError, gradeDisplayName, gradeOptions } from './data/curriculum'
+import { curriculum, curriculumError } from './data/curriculum'
 import { ValidationErrorScreen } from './components/ValidationErrorScreen'
 import { buildTheme } from './theme/theme'
-import { CadencePanel } from './features/cadences/CadencePanel'
-import { mergeMinorForms, type CadenceScale } from './features/cadences/mergeMinorForms'
 import { ChordDrillPanel } from './features/drill/ChordDrillPanel'
 import { ShapesPanel } from './features/shapes/ShapesPanel'
 import { UpdateBanner } from './components/UpdateBanner'
 
-type CadenceFilter = 'all' | 'major' | 'minor'
-type PracticeTab = 'cadences' | 'drill' | 'shapes'
+type PracticeTab = 'drill' | 'shapes'
 
 const STORAGE_KEY = 'scale-chord-practice/v2'
 
-function loadSaved(): { grade: string; expandedScaleId: string | null; tab: PracticeTab } {
+function loadSavedTab(): PracticeTab {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return {
-        grade: typeof parsed.grade === 'string' && gradeOptions.includes(parsed.grade) ? parsed.grade : gradeOptions[0],
-        expandedScaleId: typeof parsed.expandedScaleId === 'string' ? parsed.expandedScaleId : null,
-        tab: parsed.tab === 'drill' || parsed.tab === 'shapes' ? parsed.tab : 'cadences',
-      }
-    }
-  } catch { /* ignore */ }
-  return { grade: gradeOptions[0], expandedScaleId: null, tab: 'cadences' }
-}
-
-function filterScales(scales: CadenceScale[], filter: CadenceFilter): CadenceScale[] {
-  if (filter === 'all') return scales
-  return scales.filter((s) => s.mode === filter)
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')?.tab === 'shapes' ? 'shapes' : 'drill'
+  } catch {
+    return 'drill'
+  }
 }
 
 function PracticeApp() {
   const appCurriculum = curriculum!
-  const saved = useMemo(() => loadSaved(), [])
 
-  const [grade, setGrade] = useState(saved.grade)
-  const [expandedScaleId, setExpandedScaleId] = useState<string | null>(saved.expandedScaleId)
-  const [tab, setTab] = useState<PracticeTab>(saved.tab)
-  const [cadenceFilter, setCadenceFilter] = useState<CadenceFilter>('all')
+  const [tab, setTab] = useState<PracticeTab>(loadSavedTab)
   const [themeChoice, setThemeChoice] = useState<'light' | 'dark' | 'system'>('system')
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null)
 
@@ -74,13 +53,9 @@ function PracticeApp() {
     return themeChoice
   }, [themeChoice])
 
-  const scales = useMemo(() => mergeMinorForms(appCurriculum.grades[grade] ?? []), [appCurriculum.grades, grade])
-  const filteredScales = useMemo(() => filterScales(scales, cadenceFilter), [scales, cadenceFilter])
-
-  // Persist grade, expanded scale and tab to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ grade, expandedScaleId, tab }))
-  }, [grade, expandedScaleId, tab])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tab }))
+  }, [tab])
 
   return (
     <ThemeProvider theme={buildTheme(paletteMode)}>
@@ -154,49 +129,11 @@ function PracticeApp() {
           <Paper sx={{ p: { xs: 2, sm: 3 }, transition: 'box-shadow 0.3s ease' }} elevation={4}>
             <Stack spacing={2.5}>
               <Tabs value={tab} onChange={(_, value: PracticeTab) => setTab(value)} variant="fullWidth" aria-label="Practice mode">
-                <Tab value="cadences" label="Cadences" />
-                <Tab value="drill" label="Random chords" />
+                <Tab value="drill" label="Drills" />
                 <Tab value="shapes" label="Shapes" />
               </Tabs>
 
-              {tab === 'cadences' ? (
-                <>
-                  <FormControl fullWidth>
-                    <InputLabel id="grade-label">Level</InputLabel>
-                    <Select
-                      labelId="grade-label"
-                      value={grade}
-                      label="Level"
-                      onChange={(evt) => setGrade(evt.target.value)}
-                    >
-                      {gradeOptions.map((g) => (
-                        <MenuItem key={g} value={g}>
-                          {gradeDisplayName(g)}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  <ToggleButtonGroup
-                    value={cadenceFilter}
-                    exclusive
-                    onChange={(_, value) => value && setCadenceFilter(value)}
-                    aria-label="Key filter"
-                    size="small"
-                    fullWidth
-                  >
-                    <ToggleButton value="all">All</ToggleButton>
-                    <ToggleButton value="major">Major</ToggleButton>
-                    <ToggleButton value="minor">Minor</ToggleButton>
-                  </ToggleButtonGroup>
-
-                  <CadencePanel
-                    scales={filteredScales}
-                    expandedScaleId={expandedScaleId}
-                    onExpandChange={setExpandedScaleId}
-                  />
-                </>
-              ) : tab === 'drill' ? (
+              {tab === 'drill' ? (
                 <ChordDrillPanel curriculum={appCurriculum} />
               ) : (
                 <ShapesPanel curriculum={appCurriculum} />

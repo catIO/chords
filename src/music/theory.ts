@@ -249,6 +249,26 @@ export function chordDescription(chord: Chord): string {
     return QUALITY_DESCRIPTION[chord.quality] + (inversion ? `, ${inversion}` : '')
 }
 
+/**
+ * The chord a tension chord normally resolves to in `tonic`/`mode` (dominant 7ths and leading-tone chords
+ * to the tonic; ii7, iiø7, ii°6 and the cadential 6/4 to the dominant), in root position and first inversion
+ * so the voices can move by step. Empty for other chords.
+ */
+export function resolutionTargets(tonic: string, mode: Mode, chord: Chord): Chord[] {
+    const scale: ScaleType = mode === 'major' ? 'major' : 'harmonic'
+    const degree = (pitchClass(chord.root) - pitchClass(tonic) + 12) % 12
+    const leadingTone = ['diminished', 'diminished7', 'halfDiminished7'].includes(chord.quality)
+    const supertonic = ['minor7', 'halfDiminished7'].includes(chord.quality) || (chord.quality === 'diminished' && chord.inversion === 1)
+    const cadential64 = chord.tones.length === 3 && degree === 0 && chord.inversion === 2
+    const inversions = (target: number) => [0, 1].map((inversion) => diatonicChord(tonic, scale, target, { inversion }))
+
+    if ((chord.quality === 'dominant7' && degree === 7) || (leadingTone && degree === 11)) return inversions(0)
+    // The cadential 6/4 keeps its bass, so its V stays in root position
+    if (cadential64) return [diatonicChord(tonic, scale, 4)]
+    if (supertonic && degree === 2) return inversions(4)
+    return []
+}
+
 /** Builds close-position textbook treble staff notes for a diatonic chord (e.g. C4-E4-G4). */
 export function diatonicCloseNotes(
     tonic: string,

@@ -32,9 +32,11 @@ import {
     type CadenceProgression,
     type ChordFocus,
     type ChordType,
+    type DisplayMode,
     type DrillEntry,
 } from './drill'
-import { loadDrillSettings, saveDrillSettings, type DrillSettings } from './drillSettings'
+import { curatedCadences, positionLabel } from './curatedCadences'
+import { loadDrillSettings, saveDrillSettings, type DrillSettings, type Practice } from './drillSettings'
 import { curriculumKeys, KEY_TIERS, keysForTier, type KeyChoice, type KeyTier } from './keys'
 
 interface ChordDrillPanelProps {
@@ -46,28 +48,41 @@ const PRIMARY_MINOR_FORMS: { value: MinorForm; label: string }[] = [
     { value: 'harmonic', label: 'Harmonic' },
 ]
 
-const CHORD_FOCUS_OPTIONS: { value: ChordFocus; label: string }[] = [
-    { value: 'cadence', label: 'Cadence' },
-    { value: 'tonic', label: 'Tonic only' },
-    { value: 'all', label: 'All degrees' },
+const PRACTICE_OPTIONS: { value: Practice; label: string; tooltip: string }[] = [
+    { value: 'cadences', label: 'Cadences', tooltip: 'A cadence progression in one key at a time.' },
+    { value: 'scale', label: 'Scale chords', tooltip: 'All seven chords of one key, in scale order.' },
+    { value: 'tonic', label: 'Tonic inversions', tooltip: 'The tonic chord of one key in root position and its inversions.' },
+    { value: 'flashcards', label: 'Flashcards', tooltip: 'One random chord at a time from all the chosen keys.' },
 ]
+
+const PRACTICE_VIEW: Record<Practice, { displayMode: DisplayMode; focus: ChordFocus }> = {
+    cadences: { displayMode: 'sequence', focus: 'cadence' },
+    scale: { displayMode: 'sequence', focus: 'all' },
+    tonic: { displayMode: 'sequence', focus: 'tonic' },
+    flashcards: { displayMode: 'flashcard', focus: 'all' },
+}
 
 const CADENCE_PROGRESSIONS: { value: CadenceProgression; label: string; tooltip: string }[] = [
     {
         value: 'basic',
-        label: 'I–V–I',
-        tooltip: 'Tonic, dominant, tonic. RCM Levels 1–4 practise the V–I.',
+        label: 'V–I',
+        tooltip: 'Dominant to tonic: the perfect cadence on its own.',
     },
     {
         value: 'subdominant',
         label: 'I–IV–V–I',
-        tooltip: 'Adds the subdominant (IV) before the dominant, as in RCM Levels 5–8.',
+        tooltip: 'Tonic, subdominant, dominant, tonic.',
     },
     {
         value: 'cadential64',
-        label: 'I–IV–V6/4–5/3–I',
+        label: 'Cadential 6/4',
         tooltip:
-            'Cadential 6/4: the tonic chord over the dominant bass (C/G in C major) resolves to V before the tonic, as in RCM Level 9.',
+            'I–IV–V6/4–5/3–I: the tonic chord over the dominant bass (C/G in C major) resolves to V before the tonic.',
+    },
+    {
+        value: 'extended',
+        label: 'With vi and V7',
+        tooltip: 'I–vi–IV–V6/4–V–V7–I: the cadential 6/4, then V moving to V7 before the tonic.',
     },
 ]
 
@@ -81,21 +96,26 @@ const CHORD_TYPES: { value: ChordType; label: string; tooltip: string }[] = [
     {
         value: 'triads',
         label: 'Triads',
-        tooltip: 'Three notes stacked in thirds: root, 3rd, 5th. In C major: C (C E G), Dm (D F A), G (G B D).',
+        tooltip: 'Three notes stacked in thirds, one per string: root, 3rd and 5th. In C major: C (C E G), Dm (D F A), G (G B D).',
     },
     {
         value: 'sevenths',
         label: '7th chords',
         tooltip:
-            'A triad plus the 7th above the root. Drills ii7, V7 and vii7 — in C major: Dm7 (D F A C), G7 (G B D F), Bø7 (B D F A). With Cadence focus only V7 is used.',
+            'Adds the 7th above the root, so all four notes are different: Cmaj7 (C E G B), Dm7 (D F A C), G7 (G B D F). Flashcards draw ii7, V7 and vii7.',
     },
     {
         value: 'chromatic',
         label: 'Chromatic',
         tooltip:
-            'Chords using notes outside the key. V7/V, the dominant of the dominant: D7 in C, leading to G. N6, the Neapolitan sixth: D♭/F in C, leading to V. Requires Single chord flashcard with All degrees.',
+            'Chords using notes outside the key. V7/V, the dominant of the dominant: D7 in C, leading to G. N6, the Neapolitan sixth: D♭/F in C, leading to V.',
     },
 ]
+
+const CADENCE_CHORD_TYPES: Partial<Record<ChordType, { label: string; tooltip: string }>> = {
+    triads: { label: 'V', tooltip: 'The dominant as a plain triad, as in the curated cadences.' },
+    sevenths: { label: 'V7', tooltip: 'Adds the 7th to the dominant: G7 (G B D F) in C major.' },
+}
 
 const INVERSIONS = [
     { value: 0, label: 'Root pos.' },
@@ -165,9 +185,9 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
 
     const update = (patch: Partial<DrillSettings>) => setSettings((s) => ({ ...s, ...patch }))
 
-    const displayMode = settings.displayMode ?? 'sequence'
-    const focus = settings.chordFocus ?? 'cadence'
-    const cadence = settings.cadence ?? 'basic'
+    const practice = settings.practice
+    const { displayMode, focus } = PRACTICE_VIEW[practice]
+    const cadence = settings.cadence
     const chordOptions = useMemo(
         () => resolveChordOptions(displayMode, focus, settings.chordTypes, settings.inversions),
         [displayMode, focus, settings.chordTypes, settings.inversions],
@@ -263,14 +283,31 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
         [activeKey, focus, settings.minorForms, chordOptions, cadence],
     )
 
+    // Curated voicings, exactly as written, whenever the key has one and plain root-position triads are chosen
+    const curated = useMemo(() => {
+        if (!activeKey || chordOptions.chordTypes[0] !== 'triads') return []
+        const rootOnly = chordOptions.inversions.length === 1 && chordOptions.inversions[0] === 0
+        if (!rootOnly) return []
+        if (focus === 'cadence') return curatedCadences(curriculum, activeKey, cadence)
+        if (focus === 'tonic') return curatedCadences(curriculum, activeKey, 'tonic')
+        return []
+    }, [activeKey, chordOptions, focus, cadence, curriculum])
+
+    const chipLabels = curated.length > 0 ? curated[0].map((e) => e.romanNumeral) : sequenceChords.map((item) => item.label)
+
     const cadenceDescription = useMemo(
-        () => (focus === 'cadence' ? describeCadence(sequenceChords.map((item) => item.romanNumeral)) : null),
-        [focus, sequenceChords],
+        () => (focus === 'cadence' ? describeCadence(curated[0]?.map((e) => e.romanNumeral) ?? sequenceChords.map((item) => item.romanNumeral)) : null),
+        [focus, curated, sequenceChords],
     )
 
     const sequenceEvents: ChordEvent[] = useMemo(() => {
         const chords = sequenceChords.map((item) => item.chord)
-        const voicings = focus === 'all' ? voiceWithRisingBass(chords) : chords.map((chord) => voiceChord(chord))
+        // Cadences keep the four-note guitar shapes of the curated cadences
+        const threeNoteTriads = practice !== 'cadences'
+        const voicings =
+            focus === 'all'
+                ? voiceWithRisingBass(chords, { threeNoteTriads })
+                : chords.map((chord) => voiceChord(chord, { threeNoteTriads }))
         const events: ChordEvent[] = []
         sequenceChords.forEach((item, idx) => {
             const v = voicings[idx]
@@ -287,7 +324,7 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
             }
         })
         return events
-    }, [sequenceChords, focus])
+    }, [sequenceChords, focus, practice])
 
     // Single chord pool for flashcard mode
     const pool = useMemo(
@@ -306,13 +343,13 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
         [pool, roll],
     )
 
-    const singleVoicing = useMemo(() => (current ? voiceChord(current.chord) : null), [current])
+    const singleVoicing = useMemo(() => (current ? voiceChord(current.chord, { threeNoteTriads: true }) : null), [current])
 
     const next = () => {
         const value = Math.random()
         const previousId = current?.id ?? null
         setRoll((r) => ({ value, previousId, count: r.count + 1 }))
-        if ((settings.displayMode ?? 'sequence') === 'sequence') {
+        if (displayMode === 'sequence') {
             nextScale()
         }
     }
@@ -348,26 +385,27 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
     const keySetSummary = activeTier ? `${activeTier.label} keys` : 'Custom keys'
 
     const focusSummary = useMemo(() => {
-        if (focus === 'tonic') return 'Tonic only'
-        if (focus === 'all') return 'All degrees'
-        return `Cadence ${CADENCE_PROGRESSIONS.find((p) => p.value === cadence)?.label ?? ''}`
-    }, [focus, cadence])
+        const label = PRACTICE_OPTIONS.find((p) => p.value === practice)?.label ?? ''
+        if (practice !== 'cadences') return label
+        return `${label} ${CADENCE_PROGRESSIONS.find((p) => p.value === cadence)?.label ?? ''}`
+    }, [practice, cadence])
 
     const hasSelectedMinorKey = useMemo(
         () => allCurriculumKeys.some((k) => k.mode === 'minor' && settings.keyIds.includes(k.id)),
         [allCurriculumKeys, settings.keyIds],
     )
-    const showMinorHarmony = hasSelectedMinorKey && focus === 'all'
+    // Scale chords show one key at a time, so the choice matters only while that key is minor
+    const showMinorHarmony =
+        practice === 'flashcards' ? hasSelectedMinorKey : practice === 'scale' && activeKey?.mode === 'minor'
 
     const settingsSummary = useMemo(
         () =>
             [
                 keySetSummary,
-                `${settings.keyIds.length} ${settings.keyIds.length === 1 ? 'scale' : 'scales'}`,
+                `${settings.keyIds.length} ${settings.keyIds.length === 1 ? 'key' : 'keys'}`,
                 focusSummary,
-                displayMode === 'sequence' ? 'Sequence view' : 'Flashcard',
             ].join(' · '),
-        [keySetSummary, settings.keyIds.length, focusSummary, displayMode],
+        [keySetSummary, settings.keyIds.length, focusSummary],
     )
 
     return (
@@ -383,21 +421,44 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                 </AccordionSummary>
                 <AccordionDetails>
                     <Stack spacing={2.5}>
-                        {/* Display format comes first: it decides which chord options apply below */}
+                        {/* Practice comes first: it decides which options apply below */}
                         <Stack spacing={1}>
-                            <Typography variant="subtitle2">Display format</Typography>
+                            <Typography variant="subtitle2">Practice</Typography>
                             <ToggleButtonGroup
-                                value={displayMode}
+                                value={practice}
                                 exclusive
-                                onChange={(_, value) => value && update({ displayMode: value })}
-                                aria-label="Display format"
+                                onChange={(_, value: Practice | null) => value && update({ practice: value })}
+                                aria-label="Practice"
                                 size="small"
                                 fullWidth
                             >
-                                <ToggleButton value="sequence">Scale sequence (all chords at once)</ToggleButton>
-                                <ToggleButton value="flashcard">Single chord flashcard</ToggleButton>
+                                {PRACTICE_OPTIONS.map((opt) => (
+                                    <Tooltip key={opt.value} title={opt.tooltip} describeChild enterTouchDelay={400}>
+                                        <ToggleButton value={opt.value}>{opt.label}</ToggleButton>
+                                    </Tooltip>
+                                ))}
                             </ToggleButtonGroup>
                         </Stack>
+
+                        {practice === 'cadences' && (
+                            <Stack spacing={1}>
+                                <Typography variant="subtitle2">Cadence progression</Typography>
+                                <ToggleButtonGroup
+                                    value={cadence}
+                                    exclusive
+                                    onChange={(_, value: CadenceProgression | null) => value && update({ cadence: value })}
+                                    aria-label="Cadence progression"
+                                    size="small"
+                                    fullWidth
+                                >
+                                    {CADENCE_PROGRESSIONS.map((p) => (
+                                        <Tooltip key={p.value} title={p.tooltip} describeChild enterTouchDelay={400}>
+                                            <ToggleButton value={p.value}>{p.label}</ToggleButton>
+                                        </Tooltip>
+                                    ))}
+                                </ToggleButtonGroup>
+                            </Stack>
+                        )}
 
                         {/* Key set */}
                         <Stack spacing={1}>
@@ -445,49 +506,10 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                             />
                         </Stack>
 
-                        {/* Harmony Focus */}
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle2">Harmony focus</Typography>
-                            <ToggleButtonGroup
-                                value={focus}
-                                exclusive
-                                onChange={(_, value: ChordFocus | null) => value && update({ chordFocus: value })}
-                                aria-label="Harmony focus"
-                                size="small"
-                                fullWidth
-                            >
-                                {CHORD_FOCUS_OPTIONS.map((opt) => (
-                                    <ToggleButton key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </ToggleButton>
-                                ))}
-                            </ToggleButtonGroup>
-                        </Stack>
-
-                        {focus === 'cadence' && (
+                        {/* Chord types (Tonic inversions always uses triads) */}
+                        {practice !== 'tonic' && (
                             <Stack spacing={1}>
-                                <Typography variant="subtitle2">Cadence progression</Typography>
-                                <ToggleButtonGroup
-                                    value={cadence}
-                                    exclusive
-                                    onChange={(_, value: CadenceProgression | null) => value && update({ cadence: value })}
-                                    aria-label="Cadence progression"
-                                    size="small"
-                                    fullWidth
-                                >
-                                    {CADENCE_PROGRESSIONS.map((p) => (
-                                        <Tooltip key={p.value} title={p.tooltip} describeChild enterTouchDelay={400}>
-                                            <ToggleButton value={p.value}>{p.label}</ToggleButton>
-                                        </Tooltip>
-                                    ))}
-                                </ToggleButtonGroup>
-                            </Stack>
-                        )}
-
-                        {/* Chord Types (Tonic only always uses triads) */}
-                        {focus !== 'tonic' && (
-                            <Stack spacing={1}>
-                                <Typography variant="subtitle2">Chords</Typography>
+                                <Typography variant="subtitle2">{practice === 'cadences' ? 'Dominant' : 'Chords'}</Typography>
                                 <ToggleButtonGroup
                                     value={chordOptions.singleChoice ? chordOptions.chordTypes[0] : chordOptions.chordTypes}
                                     exclusive={chordOptions.singleChoice}
@@ -496,24 +518,19 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                                     size="small"
                                     fullWidth
                                 >
-                                    {CHORD_TYPES.map((type) => (
-                                        // Span wrapper lets the tooltip show on the disabled Chromatic button.
-                                        <Tooltip key={type.value} title={type.tooltip} describeChild enterTouchDelay={400}>
-                                            <Box component="span" sx={{ flex: 1, display: 'flex' }}>
-                                                <ToggleButton
-                                                    value={type.value}
-                                                    disabled={!chordOptions.allowedTypes.includes(type.value)}
-                                                >
-                                                    {type.label}
-                                                </ToggleButton>
-                                            </Box>
-                                        </Tooltip>
-                                    ))}
+                                    {CHORD_TYPES.filter((type) => chordOptions.allowedTypes.includes(type.value)).map((type) => {
+                                        const cadence = practice === 'cadences' ? CADENCE_CHORD_TYPES[type.value] : undefined
+                                        return (
+                                            <Tooltip key={type.value} title={cadence?.tooltip ?? type.tooltip} describeChild enterTouchDelay={400}>
+                                                <ToggleButton value={type.value}>{cadence?.label ?? type.label}</ToggleButton>
+                                            </Tooltip>
+                                        )
+                                    })}
                                 </ToggleButtonGroup>
                             </Stack>
                         )}
 
-                        {/* Inversions: one at a time in a scale sequence, except Tonic only which shows each */}
+                        {/* Inversions: one at a time in Cadences and Scale chords */}
                         <Stack spacing={1}>
                             <Typography variant="subtitle2">Inversions</Typography>
                             <ToggleButtonGroup
@@ -524,12 +541,8 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                                 size="small"
                                 fullWidth
                             >
-                                {INVERSIONS.map((inversion) => (
-                                    <ToggleButton
-                                        key={inversion.value}
-                                        value={inversion.value}
-                                        disabled={inversion.value > chordOptions.maxInversion}
-                                    >
+                                {INVERSIONS.filter((inversion) => inversion.value <= chordOptions.maxInversion).map((inversion) => (
+                                    <ToggleButton key={inversion.value} value={inversion.value}>
                                         {inversion.label}
                                     </ToggleButton>
                                 ))}
@@ -539,12 +552,12 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                         {/* Minor Harmony */}
                         {showMinorHarmony && (
                             <Stack spacing={1}>
-                                <Typography variant="subtitle2">Minor harmony</Typography>
+                                <Typography variant="subtitle2">Minor keys use</Typography>
                                 <ToggleButtonGroup
                                     value={settings.minorForms[0] === 'natural' ? 'natural' : 'harmonic'}
                                     exclusive
                                     onChange={(_, value: MinorForm | null) => value && update({ minorForms: [value] })}
-                                    aria-label="Minor harmony"
+                                    aria-label="Minor keys use"
                                     size="small"
                                     fullWidth
                                 >
@@ -567,11 +580,11 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                             Select at least one key to start.
                         </Typography>
                     ) : displayMode === 'sequence' && activeKey ? (
-                        /* Sequence View: Renders all chords of the active scale at once */
+                        /* Sequence View: renders all chords of the active key at once */
                         <Stack spacing={2.5}>
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Button size="small" onClick={prevScale} startIcon={<ChevronLeftIcon />}>
-                                    Prev scale
+                                    Previous key
                                 </Button>
                                 <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
                                     <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -582,16 +595,16 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                                     </Typography>
                                 </Stack>
                                 <Button size="small" onClick={nextScale} endIcon={<ChevronRightIcon />}>
-                                    Next scale
+                                    Next key
                                 </Button>
                             </Stack>
 
                             {/* Scale degree pills */}
                             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-                                {sequenceChords.map((item) => (
+                                {chipLabels.map((label, i) => (
                                     <Chip
-                                        key={item.id}
-                                        label={item.label}
+                                        key={`${i}:${label}`}
+                                        label={label}
                                         color="primary"
                                         variant="filled"
                                         sx={{ fontWeight: 700, fontSize: '0.95rem', py: 0.25 }}
@@ -610,7 +623,26 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                             )}
 
                             {/* Staff rendering all chords together */}
-                            {sequenceEvents.length > 0 ? (
+                            {curated.length > 0 ? (
+                                curated.map((events, i) => {
+                                    const position = positionLabel(events)
+                                    const caption = [i > 0 ? 'Alternative fingering' : null, position].filter(Boolean).join(' · ')
+                                    return (
+                                        <Stack key={events[0].id} spacing={0.5}>
+                                            {caption ? (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {caption}
+                                                </Typography>
+                                            ) : null}
+                                            <ChordStaff
+                                                events={events}
+                                                keySignature={toVexKeySignature(activeKey.tonic, activeKey.mode)}
+                                                endBarline={true}
+                                            />
+                                        </Stack>
+                                    )
+                                })
+                            ) : sequenceEvents.length > 0 ? (
                                 <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                                     <ChordStaff
                                         events={sequenceEvents}
@@ -624,20 +656,15 @@ export function ChordDrillPanel({ curriculum }: ChordDrillPanelProps) {
                                 </Typography>
                             )}
 
-                            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Scale {activeKeyIndex + 1} of {settings.keyIds.length}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Chord {roll.count}
-                                </Typography>
-                            </Stack>
+                            <Typography variant="body2" color="text.secondary">
+                                Key {activeKeyIndex + 1} of {settings.keyIds.length}
+                            </Typography>
 
                             <Button variant="contained" onClick={next} fullWidth>
-                                Next chord
+                                Next key
                             </Button>
                             <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-                                Space, Enter or →: next chord / scale · ←: previous scale
+                                Space, Enter or →: next key · ←: previous key
                             </Typography>
                         </Stack>
                     ) : current ? (

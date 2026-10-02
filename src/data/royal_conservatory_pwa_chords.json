@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1.0.0",
-  "title": "Royal Conservatory Scale-Chord Practice Data",
-  "description": "Grade-organized chord and cadence data for the scale exercises in the supplied document.",
+  "title": "Scale-Chord Cadence Data",
+  "description": "Graded cadence voicings with left-hand fingerings for scale practice.",
   "renderingNotes": {
-    "supported": "Chord symbols, Roman numerals, pitch spellings with written octaves, left-hand fingerings and voicings as printed in the RCM Technique book, staff rendering, and sequence order.",
-    "notEncoded": "Barre and position markings, guide-finger dashes, and held (tied) voices in the Level 10 V8-7 motion, which is encoded as two eighth-note chords."
+    "supported": "Chord symbols, Roman numerals, pitch spellings with written octaves, left-hand fingerings and voicings, staff rendering, and sequence order.",
+    "notEncoded": "Barre and position markings, guide-finger dashes, and held (tied) voices in the V8-7 motion, which is encoded as two eighth-note chords."
   },
   "grades": {
     "1": [

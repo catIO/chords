@@ -1,6 +1,6 @@
-import { gradeDisplayName } from '../../data/curriculum'
-import { locateVoicing, voiceChord, type GuitarVoicing } from '../../music/guitarVoicings'
-import { chordDescription, chordName, identifyChord, type Chord } from '../../music/theory'
+import { locateVoicing, voiceChord, voiceDiminishedGrip, voiceLeadingDistance, type GuitarVoicing } from '../../music/guitarVoicings'
+import { parsePitchSpelling } from '../../music/noteUtils'
+import { chordDescription, chordName, identifyChord, resolutionTargets, type Chord, type Mode } from '../../music/theory'
 import type { ChordEvent, Curriculum } from '../../types/curriculum'
 import { buildChordPool, buildVocabulary, pickChord } from '../drill/drill'
 import { curriculumKeys, keyId } from '../drill/keys'
@@ -133,43 +133,80 @@ export interface ShapeExample {
     fretRange: [number, number]
     /** Guitar string numbers (6 = low E), lowest string first */
     stringRange: [number, number]
-    /** RCM level the voicing is printed in, if any */
-    source: string | null
+    /** Taken from the curated cadences rather than generated */
+    curated: boolean
     weight: number
+    /** Where a tension chord normally goes, with both chords ready for notation */
+    resolution: { name: string; events: ChordEvent[] } | null
 }
 
 const toGuitarString = (stringIdx: number) => 6 - stringIdx
 
-function toExample(voicing: GuitarVoicing, chord: Chord, source: string | null): ShapeExample | null {
+function resolve(voicing: GuitarVoicing, event: ChordEvent, chord: Chord, key: KeyContext): ShapeExample['resolution'] {
+    let best: { chord: Chord; voicing: GuitarVoicing; distance: number } | null = null
+    for (const target of resolutionTargets(key.tonic, key.mode, chord)) {
+        const targetVoicing = voiceChord(target, { from: voicing })
+        const distance = targetVoicing ? voiceLeadingDistance(voicing, targetVoicing) : Infinity
+        if (targetVoicing && (!best || distance < best.distance)) best = { chord: target, voicing: targetVoicing, distance }
+    }
+    if (!best) return null
+    return {
+        name: chordName({ ...best.chord, inversion: 0 }),
+        events: [
+            event,
+            {
+                id: `${event.id}>`,
+                romanNumeral: best.chord.romanNumeral,
+                symbol: best.chord.symbol,
+                notes: best.voicing.notes,
+                fingerings: best.voicing.fingerings,
+                durationBeats: 4,
+                beatUnit: 4,
+            },
+        ],
+    }
+}
+
+interface KeyContext {
+    tonic: string
+    mode: Mode
+}
+
+const placementId = (voicing: GuitarVoicing) =>
+    voicing.strings.map((s, i) => `${s}:${voicing.frets[i]}:${voicing.fingerings[i]}`).join(' ')
+
+function toExample(voicing: GuitarVoicing, chord: Chord, curated: boolean, key: KeyContext): ShapeExample | null {
     const notes = frettedNotes(voicing)
     const family = classifyShape(notes)
     if (!family) return null
     // Keyed by placement, so enharmonic spellings of the same fingering (e.g. C♯°7 and A♯°7) appear once
-    const id = voicing.strings.map((s, i) => `${s}:${voicing.frets[i]}:${voicing.fingerings[i]}`).join(' ')
+    const id = placementId(voicing)
     const frets = notes.map((n) => n.fret)
+    const event: ChordEvent = {
+        id,
+        romanNumeral: chord.romanNumeral,
+        symbol: chord.symbol,
+        notes: voicing.notes,
+        fingerings: voicing.fingerings,
+        durationBeats: 4,
+        beatUnit: 4,
+    }
     return {
         id,
         chord,
         name: chordName(chord),
         description: chordDescription(chord),
         chordType: chord.tones.length === 4 ? 'sevenths' : 'triads',
-        event: {
-            id,
-            romanNumeral: chord.romanNumeral,
-            symbol: chord.symbol,
-            notes: voicing.notes,
-            fingerings: voicing.fingerings,
-            durationBeats: 4,
-            beatUnit: 4,
-        },
+        event,
         family,
         signature: shapeSignature(notes),
         fingerPattern: notes.map((n) => n.finger).join('–'),
         layout: shapeLayout(notes),
         fretRange: [Math.min(...frets), Math.max(...frets)],
         stringRange: [toGuitarString(notes[0].string), toGuitarString(notes[notes.length - 1].string)],
-        source,
-        weight: source ? 2 : 1,
+        curated,
+        weight: curated ? 2 : 1,
+        resolution: resolve(voicing, event, chord, key),
     }
 }
 
@@ -188,20 +225,20 @@ const REPERTOIRE_CHORDS = new Set([
     'vii°6', 'vii°7', 'vii°6/5', 'vii°4/3', 'vii°4/2', 'viiø7',
 ])
 
-/** RCM book voicings first, then common diatonic chords in common guitar keys, sorted into shape families. */
+/** Curated cadence voicings first, then common diatonic chords in common guitar keys, sorted into shape families. */
 export function buildShapeExamples(curriculum: Curriculum): ShapeExample[] {
     const examples = new Map<string, ShapeExample>()
-    const add = (voicing: GuitarVoicing | null, chord: Chord | null, source: string | null) => {
-        if (!voicing || !chord) return
-        const example = toExample(voicing, chord, source)
-        if (example && !examples.has(example.id)) examples.set(example.id, example)
+    const add = (voicing: GuitarVoicing | null, chord: Chord | null, curated: boolean, key: KeyContext) => {
+        if (!voicing || !chord || examples.has(placementId(voicing))) return
+        const example = toExample(voicing, chord, curated, key)
+        if (example) examples.set(example.id, example)
     }
 
-    for (const [grade, scales] of Object.entries(curriculum.grades)) {
+    for (const scales of Object.values(curriculum.grades)) {
         for (const scale of scales) {
             for (const event of scale.sequence) {
                 if (!event.fingerings) continue
-                add(locateVoicing(event.notes, event.fingerings), identifyChord(event.notes), gradeDisplayName(grade))
+                add(locateVoicing(event.notes, event.fingerings), identifyChord(event.notes), true, scale)
             }
         }
     }
@@ -212,8 +249,11 @@ export function buildShapeExamples(curriculum: Curriculum): ShapeExample[] {
         vocabulary: buildVocabulary(['triads', 'sevenths'], [0, 1, 2, 3]),
         weighting: 'uniform',
     })
-    for (const { chord } of pool) {
-        if (REPERTOIRE_CHORDS.has(chord.romanNumeral)) add(voiceChord(chord), chord, null)
+    for (const { chord, key } of pool) {
+        if (!REPERTOIRE_CHORDS.has(chord.romanNumeral)) continue
+        add(voiceChord(chord), chord, false, key)
+        // The same diminished-seventh grip works at every fret, so show it up the neck too
+        add(voiceDiminishedGrip(chord), chord, false, key)
     }
 
     return [...examples.values()]
@@ -223,7 +263,20 @@ export interface ShapeGroup {
     signature: string
     fingerPattern: string
     layout: string
+    /** Lowest and highest written notes of the group's chords and resolutions */
+    pitchRange: [string, string]
     examples: ShapeExample[]
+}
+
+const writtenMidi = (note: string) => {
+    const { semitone, specifiedOctave = 4 } = parsePitchSpelling(note)
+    return (specifiedOctave + 1) * 12 + semitone
+}
+
+function pitchRange(examples: ShapeExample[]): [string, string] {
+    const notes = examples.flatMap((e) => [e.event, ...(e.resolution?.events ?? [])].flatMap((event) => event.notes))
+    const sorted = [...notes].sort((a, b) => writtenMidi(a) - writtenMidi(b))
+    return [sorted[0], sorted[sorted.length - 1]]
 }
 
 /** One group per hand shape, largest first; each group's chords run up the neck. */
@@ -235,6 +288,7 @@ export function groupBySignature(examples: ShapeExample[]): ShapeGroup[] {
             signature,
             fingerPattern: items[0].fingerPattern,
             layout: items[0].layout,
+            pitchRange: pitchRange(items),
             examples: [...items].sort(
                 (a, b) => a.fretRange[0] - b.fretRange[0] || b.stringRange[0] - a.stringRange[0] || a.name.localeCompare(b.name),
             ),

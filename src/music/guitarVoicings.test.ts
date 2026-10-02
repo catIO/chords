@@ -27,6 +27,50 @@ describe('generated voicings', () => {
         expect(generateVoicing(diatonicChord('G', 'major', 0))?.notes).toEqual(['G3', 'D4', 'G4', 'B4'])
     })
 
+    it('stacks every triad as three notes in close position, the chosen inversion in the bass', () => {
+        const failures: string[] = []
+        for (const key of curriculumKeys(curriculum)) {
+            const scaleType = key.mode === 'major' ? 'major' : 'harmonic'
+            for (let degree = 0; degree < 7; degree++) {
+                for (const inversion of [0, 1, 2]) {
+                    const chord = diatonicChord(key.tonic, scaleType, degree, { inversion })
+                    const voicing = voiceChord(chord, { threeNoteTriads: true })
+                    const tones = voicing?.notes.map((n) => n.replace(/\d/, ''))
+                    const stacked = [0, 1, 2].map((i) => chord.tones[(inversion + i) % 3])
+                    const midis = voicing?.notes.map(midi) ?? []
+                    if (!voicing || tones!.join() !== stacked.join() || midis[2] - midis[0] >= 12) {
+                        failures.push(`${key.id} ${chord.romanNumeral} ${voicing?.notes.join(' ') ?? 'none'}`)
+                    }
+                }
+            }
+        }
+        expect(failures).toEqual([])
+    })
+
+    it('climbs a scale of three-note triads by step, at most one chord moved an octave', () => {
+        const failures: string[] = []
+        for (const key of curriculumKeys(curriculum)) {
+            for (const inversion of [0, 1, 2]) {
+                const chords = buildScaleSequence(key, 'all', ['natural'], [inversion], ['triads']).map((i) => i.chord)
+                const basses = voiceWithRisingBass(chords, { threeNoteTriads: true }).map((v) => (v ? midi(v.notes[0]) : NaN))
+                const leaps = basses.slice(1).filter((b, i) => !(b - basses[i] >= 1 && b - basses[i] <= 2))
+                if (basses.some(Number.isNaN) || leaps.length > 2) failures.push(`${key.id} inv${inversion}: ${basses.join(',')}`)
+            }
+        }
+        expect(failures).toEqual([])
+        const aMinor = voiceWithRisingBass(
+            buildScaleSequence({ id: 'A-minor', tonic: 'A', mode: 'minor' }, 'all', ['natural'], [0], ['triads']).map((i) => i.chord),
+            { threeNoteTriads: true },
+        )
+        expect(aMinor.map((v) => v?.notes[0])).toEqual(['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5'])
+    })
+
+    it('doubles the 3rd of a diminished triad, not its leading-tone root', () => {
+        const notes = generateVoicing(diatonicChord('C', 'major', 6))!.notes.map((n) => n.replace(/\d/, ''))
+        expect(notes.filter((n) => n === 'B')).toHaveLength(1)
+        expect(notes.filter((n) => n === 'D')).toHaveLength(2)
+    })
+
     it('puts the inversion note in the bass', () => {
         const voicing = generateVoicing(diatonicChord('C', 'major', 0, { inversion: 1 }))
         expect(voicing?.notes[0].replace(/\d/, '')).toBe('E')

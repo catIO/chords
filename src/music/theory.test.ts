@@ -2,7 +2,20 @@ import { describe, expect, it } from 'vitest'
 import curriculumData from '../data/royal_conservatory_pwa_chords.json'
 import { curriculumSchema } from '../types/curriculum'
 import { parsePitchSpelling } from './noteUtils'
-import { buildScale, chromaticChord, closePositionNotes, diatonicChord, diatonicCloseNotes, pitchClass, type Chord, type ScaleType } from './theory'
+import {
+    buildScale,
+    chordDescription,
+    chordName,
+    chromaticChord,
+    closePositionNotes,
+    diatonicChord,
+    diatonicCloseNotes,
+    identifyChord,
+    pitchClass,
+    resolutionTargets,
+    type Chord,
+    type ScaleType,
+} from './theory'
 
 const curriculum = curriculumSchema.parse(curriculumData)
 
@@ -132,6 +145,24 @@ describe('closePositionNotes', () => {
         expect(closePositionNotes(diatonicChord('C', 'major', 4, { seventh: true, inversion: 3 }))).toEqual(['F4', 'G4', 'B4', 'D5'])
         expect(closePositionNotes(diatonicChord('A', 'harmonic', 0))).toEqual(['A3', 'C4', 'E4'])
         expect(closePositionNotes(chromaticChord('C', 'N6'))).toEqual(['F4', 'Ab4', 'Db5'])
+    })
+})
+
+describe('identifyChord and resolutionTargets', () => {
+    it('names written chords, filling in an omitted fifth', () => {
+        const d7 = identifyChord(['F#3', 'C4', 'D4', 'A4'])!
+        expect([chordName(d7), chordDescription(d7)]).toEqual(['D7/F♯', 'Dominant seventh, first inversion'])
+        expect(chordName(identifyChord(['G3', 'G4', 'B4', 'G5'])!)).toBe('G major')
+    })
+
+    it('resolves tension chords and leaves plain triads alone', () => {
+        const names = (tonic: string, mode: 'major' | 'minor', chord: Chord) =>
+            resolutionTargets(tonic, mode, chord).map((c) => c.symbol)
+        expect(names('E', 'minor', diatonicChord('E', 'harmonic', 6, { seventh: true, inversion: 1 }))).toEqual(['Em', 'Em/G'])
+        expect(names('C', 'major', diatonicChord('C', 'major', 4, { seventh: true }))).toEqual(['C', 'C/E'])
+        expect(names('C', 'major', diatonicChord('C', 'major', 1, { seventh: true }))).toEqual(['G', 'G/B'])
+        expect(names('C', 'major', diatonicChord('C', 'major', 0, { inversion: 2 }))).toEqual(['G'])
+        expect(names('C', 'major', diatonicChord('C', 'major', 3))).toEqual([])
     })
 })
 

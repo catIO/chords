@@ -6,6 +6,8 @@ import {
     BarlineType,
     Formatter,
     FretHandFinger,
+    GhostNote,
+    Modifier,
     Renderer,
     Stave,
     StaveNote,
@@ -27,6 +29,20 @@ export interface ChordStaffProps {
     endBarline?: boolean
     /** Narrowest score canvas in px; lower it for a single chord */
     minWidth?: number
+    /** Written pitches (e.g. ['E3', 'A5']) the canvas always makes room for, so staves sharing them are the same height */
+    pitchRange?: string[]
+}
+
+/** Left-hand finger beside a notehead; a notehead pushed right of the stem (a second above its neighbour) takes it on the right, clear of the others. */
+function addFinger(note: StaveNote, finger: string, index: number) {
+    const modifier = new FretHandFinger(finger)
+    if (note.noteHeads[index]?.isDisplaced()) {
+        modifier.setPosition(Modifier.Position.RIGHT)
+    } else {
+        modifier.setPosition(Modifier.Position.LEFT)
+        modifier.setXShift(-10)
+    }
+    note.addModifier(modifier, index)
 }
 
 const toVexDuration = (event: ChordEvent): string => {
@@ -48,9 +64,11 @@ export function ChordStaff({
     showFingerings = true,
     clef = '8vb',
     endBarline = false,
-    minWidth = 560,
+    minWidth = 360,
+    pitchRange,
 }: ChordStaffProps) {
     const rootRef = useRef<HTMLDivElement | null>(null)
+    const rangeKey = pitchRange?.join(' ') ?? ''
 
     useEffect(() => {
         const host = rootRef.current
@@ -97,6 +115,8 @@ export function ChordStaff({
             return keySigAcc ? 'n' : null
         }
 
+        let cropTop = 0
+        let cropBottom = canvasHeight
         if (showAnnotations) {
             // Textbook close-position scale score: single voice, whole notes, chord symbol below note (Roman numerals on pills above)
             const staveNotes = events.map((event) => {
@@ -162,12 +182,7 @@ export function ChordStaff({
                         const acc = displayedAccidental(entry)
                         if (acc) bassNote.addModifier(new Accidental(acc), ki)
                     })
-                    if (fingerArr[0]) {
-                        const finger = new FretHandFinger(fingerArr[0])
-                        finger.setPosition(1)
-                        finger.setXShift(-10)
-                        bassNote.addModifier(finger, 0)
-                    }
+                    if (fingerArr[0]) addFinger(bassNote, fingerArr[0], 0)
 
                     const trebleNote = new StaveNote({
                         clef: 'treble',
@@ -179,12 +194,7 @@ export function ChordStaff({
                         const acc = displayedAccidental(entry)
                         if (acc) trebleNote.addModifier(new Accidental(acc), ki)
                         const fi = ki + 1
-                        if (fi < fingerArr.length && fingerArr[fi]) {
-                            const finger = new FretHandFinger(fingerArr[fi])
-                            finger.setPosition(1)
-                            finger.setXShift(-10)
-                            trebleNote.addModifier(finger, ki)
-                        }
+                        if (fi < fingerArr.length && fingerArr[fi]) addFinger(trebleNote, fingerArr[fi], ki)
                     })
 
                     bassVoice.addTickables([bassNote])
@@ -199,19 +209,11 @@ export function ChordStaff({
                     voiced.forEach((entry, ki) => {
                         const acc = displayedAccidental(entry)
                         if (acc) note.addModifier(new Accidental(acc), ki)
-                        if (ki < fingerArr.length && fingerArr[ki]) {
-                            const finger = new FretHandFinger(fingerArr[ki])
-                            finger.setPosition(1)
-                            finger.setXShift(-10)
-                            note.addModifier(finger, ki)
-                        }
+                        if (ki < fingerArr.length && fingerArr[ki]) addFinger(note, fingerArr[ki], ki)
                     })
                     bassVoice.addTickables([note])
-                    trebleVoice.addTickables([new StaveNote({
-                        clef: 'treble',
-                        keys: ['b/4'],
-                        duration: duration + 'r',
-                    })])
+                    // Keeps the two voices aligned without drawing a rest over the chord
+                    trebleVoice.addTickables([new GhostNote({ duration })])
                 }
             })
 
@@ -219,18 +221,38 @@ export function ChordStaff({
             new Formatter().joinVoices([bassVoice, trebleVoice]).format([bassVoice, trebleVoice], formatWidth)
             bassVoice.draw(ctx, stave)
             trebleVoice.draw(ctx, stave)
+            // Trim the empty space above and below the music; the full width keeps staves aligned
+            const noteYs = [...bassVoice.getTickables(), ...trebleVoice.getTickables()].flatMap((tickable) => {
+                if (!(tickable instanceof StaveNote)) return []
+                const note = tickable
+                if (!note.hasStem()) return note.getYs()
+                const { topY, baseY } = note.getStemExtents()
+                return [...note.getYs(), topY, baseY]
+            })
+            const rangeYs = rangeKey
+                ? allocateChordVoicing(rangeKey.split(' ')).map((entry) => {
+                    const note = new StaveNote({ clef: 'treble', keys: [entry.vexKey], duration: 'w' })
+                    return stave.getYForNote(note.getKeyProps()[0].line)
+                })
+                : []
+            noteYs.push(...rangeYs)
+            cropTop = Math.min(stave.getYForLine(0), ...noteYs) - 18
+            cropBottom = Math.max(stave.getYForLine(4) + 38, ...noteYs.map((y) => y + 18))
         }
 
         // Make SVG responsive so it fills the score canvas without horizontal scroll
         const svg = host.querySelector('svg')
         if (svg) {
-            svg.setAttribute('viewBox', `0 0 ${canvasWidth} ${canvasHeight}`)
+            svg.setAttribute('viewBox', `0 ${cropTop} ${canvasWidth} ${cropBottom - cropTop}`)
             svg.setAttribute('width', '100%')
-            svg.setAttribute('height', 'auto')
+            svg.removeAttribute('height')
+            // VexFlow's resize() also sets a fixed inline size, which would keep the uncropped height
+            svg.style.width = '100%'
+            svg.style.height = 'auto'
             svg.style.display = 'block'
             svg.style.maxWidth = '100%'
         }
-    }, [events, currentIndex, keySignature, showAnnotations, showFingerings, clef, endBarline, minWidth])
+    }, [events, currentIndex, keySignature, showAnnotations, showFingerings, clef, endBarline, minWidth, rangeKey])
 
     return (
         <Box

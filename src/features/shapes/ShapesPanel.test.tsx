@@ -40,6 +40,21 @@ describe('ShapesPanel', () => {
         expect(screen.getByText('Exercise 2')).toBeInTheDocument()
     })
 
+    it('opens the resolution of a tension chord on the staff', async () => {
+        render(<ShapesPanel curriculum={curriculum} />)
+        await userEvent.click(screen.getByRole('button', { name: /^Parallelogram/ }))
+        await userEvent.click(screen.getAllByText(/^Fingers /)[0])
+
+        const toggle = screen.getAllByRole('button', { name: /^→ / })[0]
+        expect(toggle).toHaveAttribute('aria-expanded', 'false')
+        const staff = screen.getAllByTestId('staff')[0]
+        expect(staff.textContent?.split(' | ')).toHaveLength(1)
+
+        await userEvent.click(toggle)
+        expect(toggle).toHaveAttribute('aria-expanded', 'true')
+        expect(screen.getAllByTestId('staff')[0].textContent?.split(' | ')).toHaveLength(2)
+    })
+
     it('disables families with no chords', () => {
         render(<ShapesPanel curriculum={curriculum} />)
         expect(screen.getByRole('button', { name: 'Box (0)' })).toHaveAttribute('aria-disabled', 'true')

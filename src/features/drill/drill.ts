@@ -14,8 +14,8 @@ export type Weighting = 'common' | 'uniform'
 export type ChordType = 'triads' | 'sevenths' | 'chromatic'
 export type ChordFocus = 'cadence' | 'tonic' | 'all'
 export type DisplayMode = 'sequence' | 'flashcard'
-/** basic: I–V–I · subdominant: I–IV–V–I · cadential64: I–IV–V6/4–V5/3–I */
-export type CadenceProgression = 'basic' | 'subdominant' | 'cadential64'
+/** basic: V–I · subdominant: I–IV–V–I · cadential64: I–IV–V6/4–V5/3–I · extended: I–vi–IV–V6/4–V–V7–I */
+export type CadenceProgression = 'basic' | 'subdominant' | 'cadential64' | 'extended'
 
 export interface ChordOptions {
     /** Chord types the current display format and focus can use */
@@ -80,7 +80,7 @@ export function buildVocabulary(
         if (focus === 'tonic') {
             triadDegrees = [0] // I / i
         } else if (focus === 'cadence') {
-            triadDegrees = progression === 'basic' ? [0, 4] : [0, 3, 4]
+            triadDegrees = progression === 'basic' ? [0, 4] : progression === 'extended' ? [0, 3, 4, 5] : [0, 3, 4]
         } else {
             triadDegrees = [0, 1, 2, 3, 4, 5, 6]
         }
@@ -252,19 +252,30 @@ export function buildScaleSequence(
     if (focus === 'cadence') {
         const useSeventhDominant = chordTypes.includes('sevenths') && !chordTypes.includes('triads')
         const dominant = { degree: 4, seventh: useSeventhDominant }
+        // Cadential 6/4: the tonic chord over the dominant bass, resolving to V
+        const cadential64 = { degree: 0, inversion: 2, romanNumeral: 'V6/4' }
         const cadenceSteps: { degree: number; seventh?: boolean; inversion?: number; romanNumeral?: string }[] =
             progression === 'basic'
-                ? [{ degree: 0 }, dominant, { degree: 0 }]
+                ? [dominant, { degree: 0 }]
                 : progression === 'subdominant'
                     ? [{ degree: 0 }, { degree: 3 }, dominant, { degree: 0 }]
-                    : [
-                        { degree: 0 },
-                        { degree: 3 },
-                        // Cadential 6/4: the tonic chord over the dominant bass, resolving to V
-                        { degree: 0, inversion: 2, romanNumeral: 'V6/4' },
-                        { ...dominant, inversion: 0, romanNumeral: useSeventhDominant ? undefined : 'V5/3' },
-                        { degree: 0 },
-                    ]
+                    : progression === 'cadential64'
+                        ? [
+                            { degree: 0 },
+                            { degree: 3 },
+                            cadential64,
+                            { ...dominant, inversion: 0, romanNumeral: useSeventhDominant ? undefined : 'V5/3' },
+                            { degree: 0 },
+                        ]
+                        : [
+                            { degree: 0 },
+                            { degree: 5 },
+                            { degree: 3 },
+                            cadential64,
+                            { degree: 4, inversion: 0 },
+                            { degree: 4, seventh: true, inversion: 0 },
+                            { degree: 0 },
+                        ]
 
         return cadenceSteps.map((step, idx) => {
             const options = { seventh: step.seventh, inversion: step.inversion ?? primaryInversion }
